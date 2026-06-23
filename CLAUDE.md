@@ -14,6 +14,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 │   ├── mineral-pdf-mcp/     # NI 43-101 PDF解析服务 (TypeScript)
 │   ├── lme-price-mcp/       # LME金属价格行情服务 (TypeScript)
 │   ├── mining-agent/        # 主Agent编排层
+│   │   ├── src/
+│   │   │   ├── agent.ts     # Agent核心逻辑
+│   │   │   ├── cli.ts       # 命令行工具
+│   │   │   ├── server.ts    # Web服务器
+│   │   │   └── mcp-client.ts # MCP客户端
+│   │   └── public/
+│   │       └── index.html   # Web界面
 │   └── shared/              # 共享类型定义
 ├── docker-compose.yml       # Docker编排
 ├── mcp-config.json          # Claude Desktop/Cursor MCP配置
@@ -27,17 +34,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # 安装依赖
 npm install
 
-# 构建所有包
+# Web界面
+cd packages/mining-agent
+npm run web
+
+# 命令行
+npx tsx src/cli.ts "查询内容"
+
+# 保存报告
+npx tsx src/cli.ts "查询内容" --save
+
+# 构建
 npm run build
 
-# 运行开发模式
+# Docker
 docker-compose up
-
-# 清理构建产物
-npm run clean
-
-# TypeScript类型检查
-npx tsc --noEmit
 ```
 
 ## MCP服务器工具
@@ -59,10 +70,12 @@ npx tsc --noEmit
 |------|------|--------|
 | ANTHROPIC_API_KEY | Claude API密钥 | - |
 | ANTHROPIC_MODEL | Claude模型 | claude-opus-4-7 |
+| PORT | Web服务端口 | 3000 |
 
 ## 开发说明
 
 - 使用 `npm workspaces` 管理多包项目
 - MCP服务器通过 stdio 通信
+- Web界面使用 Express + 原生 HTML/CSS/JS
 - Agent使用TypeScript开发，支持tsx热重载
 - Docker容器化部署，支持docker-compose一键启动
