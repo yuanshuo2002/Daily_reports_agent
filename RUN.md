@@ -88,10 +88,31 @@ docker-compose up
 ## 环境变量
 
 ```bash
-# .env
-ANTHROPIC_API_KEY=your_api_key_here  # 可选，用于AI增强
-ANTHROPIC_MODEL=claude-opus-4-7     # 可选
-PORT=3000                           # Web服务端口
+# Claude API (默认)
+ANTHROPIC_API_KEY=your_api_key_here
+ANTHROPIC_MODEL=claude-opus-4-7
+
+# OpenAI API (可选)
+OPENAI_API_KEY=your_openai_key_here
+OPENAI_MODEL=gpt-4o
+
+# DeepSeek API (可选)
+DEEPSEEK_API_KEY=your_deepseek_key_here
+DEEPSEEK_MODEL=deepseek-chat
+
+# 默认使用的模型
+DEFAULT_MODEL=claude-opus-4-7
+
+# Web服务端口
+PORT=3000
+```
+
+### 兼容模式 (支持硅基流动、阿里云等)
+
+```bash
+COMPATIBLE_API_KEY=your_api_key
+COMPATIBLE_BASE_URL=https://api.siliconflow.cn/v1
+COMPATIBLE_MODEL=gpt-4o
 ```
 
 ---

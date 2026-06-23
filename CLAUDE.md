@@ -18,7 +18,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 │   │   │   ├── agent.ts     # Agent核心逻辑
 │   │   │   ├── cli.ts       # 命令行工具
 │   │   │   ├── server.ts    # Web服务器
-│   │   │   └── mcp-client.ts # MCP客户端
+│   │   │   ├── mcp-client.ts # MCP客户端
+│   │   │   └── llm-client.ts # LLM抽象层 (支持多模型)
 │   │   └── public/
 │   │       └── index.html   # Web界面
 │   └── shared/              # 共享类型定义
@@ -69,8 +70,24 @@ docker-compose up
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | ANTHROPIC_API_KEY | Claude API密钥 | - |
+| OPENAI_API_KEY | OpenAI API密钥 | - |
+| DEEPSEEK_API_KEY | DeepSeek API密钥 | - |
+| COMPATIBLE_API_KEY | 兼容模式API密钥 | - |
+| COMPATIBLE_BASE_URL | 兼容模式端点 | - |
+| DEFAULT_MODEL | 默认模型 | claude-opus-4-7 |
 | ANTHROPIC_MODEL | Claude模型 | claude-opus-4-7 |
 | PORT | Web服务端口 | 3000 |
+
+## LLM 支持
+
+支持多种大模型，通过 `llm-client.ts` 统一抽象：
+
+- **Anthropic**: Claude Opus/Sonnet/Haiku
+- **OpenAI**: GPT-4o, GPT-4 Turbo, GPT-3.5 Turbo
+- **DeepSeek**: DeepSeek Chat
+- **兼容模式**: 支持硅基流动、阿里云等兼容 OpenAI 接口的模型
+
+Web UI 可通过下拉菜单自由切换模型。
 
 ## 开发说明
 

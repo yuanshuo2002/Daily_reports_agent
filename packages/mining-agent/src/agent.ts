@@ -4,10 +4,9 @@
  * 使用LangGraph编排的智能代理，整合MCP服务生成矿业日报
  */
 
-import Anthropic from '@anthropic-ai/sdk';
 import { MCPToolClient } from './mcp-client.js';
+import { createLLMClient, isLLMConfigured, getModelInfo, LLMClient } from './llm-client.js';
 import * as path from 'path';
-import * as fs from 'fs';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -46,16 +45,21 @@ export interface DailyReportState {
   error?: string;
 }
 
+export interface DailyReportOptions {
+  modelId?: string;  // 使用的模型 ID，如 'claude-opus-4-7', 'gpt-4o', 'deepseek-chat'
+}
+
 export class MiningAgent {
-  private anthropic: Anthropic;
+  private llmClient: LLMClient | null = null;
   private newsClient: MCPToolClient;
   private pdfClient: MCPToolClient;
   private priceClient: MCPToolClient;
-  private model: string;
+  private modelId: string;
+  private modelInfo: { id: string; name: string; provider: string; description: string };
 
-  constructor() {
-    this.anthropic = new Anthropic();
-    this.model = process.env.ANTHROPIC_MODEL || 'claude-opus-4-7';
+  constructor(options: DailyReportOptions = {}) {
+    this.modelId = options.modelId || process.env.DEFAULT_MODEL || 'claude-opus-4-7';
+    this.modelInfo = getModelInfo(this.modelId);
 
     // 初始化MCP客户端
     const isWindows = process.platform === 'win32';
@@ -85,6 +89,49 @@ export class MiningAgent {
       tsxArgs('packages/lme-price-mcp'),
       'lme-price-mcp'
     );
+  }
+
+  /**
+   * 初始化 LLM 客户端
+   */
+  private async initializeLLM(): Promise<void> {
+    if (this.llmClient) return;
+
+    if (!isLLMConfigured(this.modelId)) {
+      console.error(`[Agent] ${this.modelInfo.name} 未配置 API 密钥，将使用基础报告格式`);
+      return;
+    }
+
+    try {
+      this.llmClient = createLLMClient({
+        provider: this.modelInfo.provider as 'anthropic' | 'openai' | 'deepseek' | 'compatible',
+        model: this.modelId,
+        apiKey: this.getApiKey(),
+        baseUrl: this.getBaseUrl(),
+      });
+      console.error(`[Agent] LLM 客户端初始化成功: ${this.modelInfo.name}`);
+    } catch (error) {
+      console.error(`[Agent] LLM 客户端初始化失败:`, error);
+    }
+  }
+
+  private getApiKey(): string {
+    const keyMap: Record<string, string | undefined> = {
+      anthropic: process.env.ANTHROPIC_API_KEY,
+      openai: process.env.OPENAI_API_KEY,
+      deepseek: process.env.DEEPSEEK_API_KEY,
+      compatible: process.env.COMPATIBLE_API_KEY,
+    };
+    return keyMap[this.modelInfo.provider] || '';
+  }
+
+  private getBaseUrl(): string | undefined {
+    const urlMap: Record<string, string | undefined> = {
+      openai: process.env.OPENAI_BASE_URL,
+      deepseek: 'https://api.deepseek.com',
+      compatible: process.env.COMPATIBLE_BASE_URL,
+    };
+    return urlMap[this.modelInfo.provider];
   }
 
   async initialize(): Promise<void> {
@@ -457,10 +504,11 @@ export class MiningAgent {
    * 使用AI生成最终报告
    */
   private async generateFinalReport(state: DailyReportState): Promise<string> {
-    console.error('[Agent] Generating final report with AI...');
+    console.error(`[Agent] Generating final report with ${this.modelInfo.name}...`);
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
+    await this.initializeLLM();
+
+    if (!this.llmClient) {
       return this.generateMarkdownReport(state);
     }
 
@@ -470,6 +518,7 @@ export class MiningAgent {
 ## 基本信息
 - 矿区: ${state.miningArea}
 - 日期: ${new Date().toLocaleDateString('zh-CN')}
+- 生成模型: ${this.modelInfo.name}
 
 ## 关键数据
 ${state.resources.length > 0 ? `
@@ -478,7 +527,7 @@ ${state.resources.map(r => `- ${r.mineralType}: 指示储量 ${r.indicatedReserv
 
 ${state.priceTrends.length > 0 ? `
 **价格走势:**
-${state.priceTrends.map(p => `- ${p.commodity}: ¥${p.average.toLocaleString()}/吨 (${p.trend === 'up' ? '上涨📈' : p.trend === 'down' ? '下跌📉' : '平稳➡️'})`).join('\n')}` : ''}
+${state.priceTrends.map(p => `- ${p.commodity}: ¥${p.average.toLocaleString()}/吨 (${p.trend === 'up' ? '上涨' : p.trend === 'down' ? '下跌' : '平稳'})`).join('\n')}` : ''}
 
 ## 新闻要点
 ${state.newsArticles.slice(0, 5).map((a, i) => `${i + 1}. ${a.title}`).join('\n')}
@@ -489,7 +538,7 @@ ${state.riskWarnings.map(r => `- [${r.level.toUpperCase()}] ${r.title}`).join('\
 请用Markdown格式生成一份精炼的日报，格式如下（控制在500字以内）:
 
 # 🏔️ [矿区简称] 矿业日报
-> 📅 [日期]
+> 📅 [日期] | 🤖 ${this.modelInfo.name}
 
 ## 📰 今日要点
 [3-5句话总结最重要的新闻，简洁有力]
@@ -505,21 +554,12 @@ ${state.riskWarnings.map(r => `- [${r.level.toUpperCase()}] ${r.title}`).join('\
 
 使用中文，专业简洁，突出重点数据。`;
 
-      const response = await this.anthropic.messages.create({
-        model: this.model,
-        max_tokens: 4096,
-        messages: [{
-          role: 'user',
-          content: prompt,
-        }],
+      const response = await this.llmClient.generate(prompt, {
+        maxTokens: 4096,
+        temperature: 0.7,
       });
 
-      const content = response.content[0];
-      if (content.type === 'text') {
-        return content.text;
-      }
-
-      return this.generateMarkdownReport(state);
+      return response.content;
     } catch (error) {
       console.error('[Agent] AI generation error:', error);
       return this.generateMarkdownReport(state);
@@ -609,10 +649,21 @@ ${state.sources.slice(0, 5).map(s => `- ${s}`).join('\n')}
 
   /**
    * 主流程：生成日报
+   * @param query 查询内容
+   * @param modelId 可选，指定使用的模型
    */
-  async generateDailyReport(query: string): Promise<string> {
+  async generateDailyReport(query: string, modelId?: string): Promise<string> {
+    // 如果指定了新模型，更新配置
+    if (modelId && modelId !== this.modelId) {
+      this.modelId = modelId;
+      this.modelInfo = getModelInfo(modelId);
+      this.llmClient = null;  // 重置 LLM 客户端
+      console.error(`[Agent] 模型已切换为: ${this.modelInfo.name}`);
+    }
+
     console.error('[Agent] Starting daily report generation...');
     console.error(`[Agent] Query: ${query}`);
+    console.error(`[Agent] Model: ${this.modelInfo.name}`);
 
     // 初始化MCP连接
     await this.initialize();

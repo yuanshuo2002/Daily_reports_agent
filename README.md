@@ -69,13 +69,82 @@ docker-compose up
 └── README.md
 ```
 
-## 环境变量
+## 环境变量配置
+
+### 快速配置
+
+1. 复制示例配置文件：
+```bash
+cd packages/mining-agent
+cp .env.example .env
+```
+
+2. 编辑 `.env` 文件，填入你的 API 密钥
+
+3. 启动服务：
+```bash
+npm run web
+```
+
+### 详细配置
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | ANTHROPIC_API_KEY | Claude API 密钥 | - |
+| OPENAI_API_KEY | OpenAI API 密钥 | - |
+| DEEPSEEK_API_KEY | DeepSeek API 密钥 | - |
+| DEFAULT_MODEL | 默认模型 | claude-opus-4-7 |
 | ANTHROPIC_MODEL | Claude 模型 | claude-opus-4-7 |
+| OPENAI_MODEL | OpenAI 模型 | gpt-4o |
+| DEEPSEEK_MODEL | DeepSeek 模型 | deepseek-chat |
 | PORT | Web服务端口 | 3000 |
+
+### 获取 API 密钥
+
+**Anthropic (Claude)**
+1. 访问 https://console.anthropic.com/
+2. 注册/登录账号
+3. 在 API Keys 中创建新密钥
+
+**OpenAI**
+1. 访问 https://platform.openai.com/
+2. 注册/登录账号
+3. 在 API Keys 中创建新密钥
+
+**DeepSeek**
+1. 访问 https://platform.deepseek.com/
+2. 注册/登录账号
+3. 在 API Keys 中创建新密钥
+
+**硅基流动 (SiliconFlow)** - 国内用户推荐
+1. 访问 https://siliconflow.cn/
+2. 注册/登录账号
+3. 在 API 密钥中创建新密钥
+
+## 支持的大模型
+
+系统支持多种大模型提供商，可在 Web UI 中自由切换：
+
+| 提供商 | 模型 | 说明 |
+|--------|------|------|
+| Anthropic | Claude Opus 4.7 | 最强推理能力 |
+| Anthropic | Claude Sonnet 4.6 | 平衡性能 |
+| Anthropic | Claude Haiku 4.5 | 快速响应 |
+| OpenAI | GPT-4o | 最新 GPT-4 |
+| OpenAI | GPT-4 Turbo | 高性能 |
+| OpenAI | GPT-3.5 Turbo | 快速低成本 |
+| DeepSeek | DeepSeek Chat | 深度求索对话模型 |
+| 兼容模式 | 自定义端点 | 支持硅基流动、阿里云等 |
+
+### 兼容模式配置
+
+如需使用其他兼容 OpenAI 接口的模型（如硅基流动、阿里云等），配置以下环境变量：
+
+```bash
+COMPATIBLE_API_KEY=your_api_key
+COMPATIBLE_BASE_URL=https://api.siliconflow.cn/v1
+COMPATIBLE_MODEL=gpt-4o
+```
 
 ## 生成的日报示例
 

@@ -52,8 +52,61 @@
       border: 1px solid rgba(255, 255, 255, 0.1);
     }
 
+    .form-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .form-row .form-group {
+      flex: 1;
+      margin-bottom: 0;
+    }
+
     .form-group {
       margin-bottom: 16px;
+    }
+
+    select {
+      width: 100%;
+      padding: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.3);
+      color: #fff;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: border-color 0.3s;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      padding-right: 40px;
+    }
+
+    select:focus {
+      outline: none;
+      border-color: #00d4ff;
+    }
+
+    select option {
+      background: #1a1a2e;
+      color: #fff;
+      padding: 10px;
+    }
+
+    .model-status {
+      font-size: 0.8rem;
+      margin-top: 6px;
+      color: #888;
+    }
+
+    .model-status.configured {
+      color: #4ade80;
+    }
+
+    .model-status.unconfigured {
+      color: #f87171;
     }
 
     label {
@@ -315,16 +368,29 @@
     </header>
 
     <div class="card">
-      <div class="form-group">
-        <label for="query">查询内容</label>
-        <div class="presets">
-          <button class="preset-btn" data-query="给我生成一份关于 Pilbara 锂矿的今日简报">Pilbara 锂矿</button>
-          <button class="preset-btn" data-query="分析 Atacama 盐湖的锂矿情况">Atacama 盐湖</button>
-          <button class="preset-btn" data-query="查看 Nevada 铜矿的情况">Nevada 铜矿</button>
-          <button class="preset-btn" data-query="分析全球金价走势">金价走势</button>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="query">查询内容</label>
+          <div class="presets">
+            <button class="preset-btn" data-query="给我生成一份关于 Pilbara 锂矿的今日简报">Pilbara 锂矿</button>
+            <button class="preset-btn" data-query="分析 Atacama 盐湖的锂矿情况">Atacama 盐湖</button>
+            <button class="preset-btn" data-query="查看 Nevada 铜矿的情况">Nevada 铜矿</button>
+            <button class="preset-btn" data-query="分析全球金价走势">金价走势</button>
+          </div>
+          <textarea id="query" placeholder="输入您想查询的内容，例如：&#10;• 给我生成一份关于 Pilbara 锂矿的今日简报&#10;• 分析一下 Atacama 盐湖的锂矿情况&#10;• 查看 Nevada 铜矿情况"></textarea>
         </div>
-        <textarea id="query" placeholder="输入您想查询的内容，例如：&#10;• 给我生成一份关于 Pilbara 锂矿的今日简报&#10;• 分析一下 Atacama 盐湖的锂矿情况&#10;• 查看 Nevada 铜矿情况"></textarea>
       </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="modelSelect">AI 模型</label>
+          <select id="modelSelect">
+            <option value="">加载中...</option>
+          </select>
+          <div class="model-status" id="modelStatus"></div>
+        </div>
+      </div>
+
       <div class="btn-group">
         <button class="btn-primary" id="generateBtn" onclick="generateReport()">
           <span>⚡</span> 生成日报
@@ -359,6 +425,56 @@
 
   <script>
     let currentReport = '';
+    let availableModels = [];
+    let defaultModel = 'claude-opus-4-7';
+
+    // 页面加载时获取模型列表
+    async function loadModels() {
+      try {
+        const response = await fetch('/api/models');
+        const data = await response.json();
+        availableModels = data.models;
+        defaultModel = data.defaultModel;
+
+        const select = document.getElementById('modelSelect');
+        select.innerHTML = '';
+
+        availableModels.forEach(model => {
+          const option = document.createElement('option');
+          option.value = model.id;
+          option.textContent = `${model.name} - ${model.description}`;
+          option.dataset.configured = model.configured;
+          option.dataset.provider = model.provider;
+
+          if (model.id === defaultModel) {
+            option.selected = true;
+          }
+
+          select.appendChild(option);
+        });
+
+        updateModelStatus();
+      } catch (error) {
+        console.error('加载模型列表失败:', error);
+        const select = document.getElementById('modelSelect');
+        select.innerHTML = '<option value="claude-opus-4-7">Claude Opus (默认)</option>';
+        updateModelStatus();
+      }
+    }
+
+    function updateModelStatus() {
+      const select = document.getElementById('modelSelect');
+      const status = document.getElementById('modelStatus');
+      const selectedOption = select.options[select.selectedIndex];
+
+      if (selectedOption && selectedOption.dataset.configured === 'true') {
+        status.textContent = '✓ API 密钥已配置';
+        status.className = 'model-status configured';
+      } else {
+        status.textContent = '✗ 未配置 API 密钥，将使用基础报告格式';
+        status.className = 'model-status unconfigured';
+      }
+    }
 
     // 预设按钮点击
     document.querySelectorAll('.preset-btn').forEach(btn => {
@@ -367,12 +483,17 @@
       });
     });
 
+    // 模型选择变化
+    document.getElementById('modelSelect').addEventListener('change', updateModelStatus);
+
     async function generateReport() {
       const query = document.getElementById('query').value.trim();
       if (!query) {
         showError('请输入查询内容');
         return;
       }
+
+      const modelId = document.getElementById('modelSelect').value || defaultModel;
 
       hideError();
       showLoading();
@@ -383,7 +504,7 @@
         const response = await fetch('/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query })
+          body: JSON.stringify({ query, modelId })
         });
 
         if (!response.ok) {
@@ -458,6 +579,9 @@
       document.getElementById('generateBtn').disabled = disabled;
       document.getElementById('saveBtn').disabled = disabled || !currentReport;
     }
+
+    // 页面加载时初始化
+    document.addEventListener('DOMContentLoaded', loadModels);
 
     // 简单的 Markdown 解析
     const marked = {
