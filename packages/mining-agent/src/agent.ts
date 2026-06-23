@@ -663,14 +663,28 @@ export class MiningAgent {
 - 标题包含矿种名称
 - 只用查询相关数据
 - Markdown格式，500字以上
-- 日期必须用: ${currentDate}`;
+- **关键**: 报告标题行和页脚中的日期必须是: ${currentDate}`;
 
-      const response = await this.llmClient.generate(prompt, {
+      let report = await this.llmClient.generate(prompt, {
         maxTokens: 4096,
         temperature: 0.7,
       });
 
-      return response.content;
+      // 后处理：强制替换所有日期为当前日期（修复某些模型不遵守日期指令的问题）
+      report = report.content.replace(
+        />?\s*📅\s*[:：]?\s*\d{4}年\d{1,2}月\d{1,2}日/g,
+        `> 📅 ${currentDate}`
+      );
+      report = report.replace(
+        /📅\s*[:：]?\s*\d{4}年\d{1,2}月\d{1,2}日/g,
+        `📅 ${currentDate}`
+      );
+      report = report.replace(
+        /生成时间[：:]\s*\d{1,2}:\d{2}:\d{2}/g,
+        `生成时间: ${new Date().toLocaleTimeString('zh-CN')}`
+      );
+
+      return report;
     } catch (error) {
       console.error('[Agent] AI generation error:', error);
       return this.generateMarkdownReport(state);
