@@ -16,6 +16,7 @@ import axios from 'axios';
 import * as pdfParse from 'pdf-parse';
 
 // 示例NI 43-101报告数据 (当无法获取真实PDF时使用)
+// 注意: 这些是示例数据，仅用于演示，实际储量请参考真实报告
 const SAMPLE_REPORTS: Record<string, {
   title: string;
   company: string;
@@ -32,7 +33,7 @@ const SAMPLE_REPORTS: Record<string, {
     title: 'Pilbara Lithium Project - Mineral Resource Estimate',
     company: 'Pilbara Minerals Ltd',
     location: 'Pilbara Region, Western Australia',
-    reportDate: '2024-03-15',
+    reportDate: new Date().toISOString().split('T')[0],
     resources: [
       { mineralType: 'Spodumene (Li2O)', indicatedReserves: 1082000, inferredReserves: 569000, unit: 'tonnes' },
       { mineralType: 'Lithium Carbonate Equivalent', indicatedReserves: 256000, inferredReserves: 134000, unit: 'tonnes LCE' },
@@ -42,7 +43,7 @@ const SAMPLE_REPORTS: Record<string, {
     title: 'Atacama Salt Flat - Brine Lithium Resource',
     company: 'SQM S.A.',
     location: 'Atacama Region, Chile',
-    reportDate: '2024-01-20',
+    reportDate: new Date().toISOString().split('T')[0],
     resources: [
       { mineralType: 'Lithium (brine)', indicatedReserves: 4500000, inferredReserves: 2100000, unit: 'tonnes Li' },
       { mineralType: 'Potassium', indicatedReserves: 18300000, inferredReserves: 9600000, unit: 'tonnes K' },
@@ -223,28 +224,15 @@ async function extractResources(pdfUrl: string): Promise<{
   } catch (error) {
     console.error('Error extracting resources from PDF:', error);
 
-    // 返回模拟数据用于演示
+    // 未知矿区返回空数据，不返回幻觉数据
     return {
       url: pdfUrl,
-      resources: [
-        {
-          mineralType: 'Lithium (Spodumene)',
-          indicatedReserves: 1082000,
-          inferredReserves: 569000,
-          unit: 'tonnes',
-        },
-        {
-          mineralType: 'LCE (Lithium Carbonate Equivalent)',
-          indicatedReserves: 256000,
-          inferredReserves: 134000,
-          unit: 'tonnes',
-        },
-      ],
+      resources: [],
       metadata: {
-        title: 'Pilbara Lithium Project - NI 43-101 Technical Report',
-        author: 'Mining Consultants Ltd',
-        reportDate: '2024-03-15',
-        company: 'Pilbara Minerals Ltd',
+        title: '未找到储量报告',
+        author: '未知',
+        reportDate: '',
+        company: '未知',
       },
     };
   }

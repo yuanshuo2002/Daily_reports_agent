@@ -216,6 +216,21 @@ export class MiningAgent {
   }
 
   /**
+   * 根据查询确定矿种中文名称
+   */
+  private getMineralNameCN(query: string): string {
+    const queryLower = query.toLowerCase();
+    if (queryLower.includes('锂') || queryLower.includes('lithium')) return '锂矿';
+    if (queryLower.includes('铜') || queryLower.includes('copper')) return '铜矿';
+    if (queryLower.includes('金') || queryLower.includes('gold')) return '金矿';
+    if (queryLower.includes('银') || queryLower.includes('silver')) return '银矿';
+    if (queryLower.includes('镍') || queryLower.includes('nickel')) return '镍矿';
+    if (queryLower.includes('钴') || queryLower.includes('cobalt')) return '钴矿';
+    if (queryLower.includes('铁') || queryLower.includes('iron')) return '铁矿';
+    return '矿业';
+  }
+
+  /**
    * 收集新闻数据
    */
   private async collectNews(mineralType: string, miningArea: string): Promise<{
@@ -284,6 +299,36 @@ export class MiningAgent {
           summary: `全球范围内铜矿勘探投资增加，新项目储备提升。`
         }
       ],
+      gold: [
+        {
+          title: `${miningArea}金矿生产稳定`,
+          summary: `该地区金矿项目运营正常，黄金产量保持稳定。`
+        },
+        {
+          title: '金价突破历史高位',
+          summary: `避险需求推动金价上涨，突破2400美元/盎司关口。`
+        },
+        {
+          title: '黄金ETF持仓增加',
+          summary: `机构投资者增加黄金配置，全球ETF持仓量上升。`
+        }
+      ],
+      nickel: [
+        {
+          title: `${miningArea}镍矿项目推进中`,
+          summary: `该地区镍矿开发进展顺利，电池级镍需求持续增长。`
+        },
+        {
+          title: '镍价震荡上行',
+          summary: `不锈钢和电池需求支撑镍价，供应端有扰动。`
+        }
+      ],
+      cobalt: [
+        {
+          title: '钴价小幅回暖',
+          summary: `钴价触底反弹，新能源汽车需求提振市场情绪。`
+        }
+      ],
       default: [
         {
           title: `${miningArea}矿业动态`,
@@ -334,10 +379,17 @@ export class MiningAgent {
         pdf_url: `https://example.com/ni43-101/${miningArea.toLowerCase().replace(/\s+/g, '-')}.pdf`,
       }) as { resources?: Array<{ mineralType: string; indicatedReserves: number; inferredReserves: number; unit: string }> };
 
-      return result.resources || [];
+      // 如果返回空数组，说明没有找到相关报告，不要使用mock数据
+      if (!result.resources || result.resources.length === 0) {
+        console.error('[Agent] No resources found in PDF, returning empty');
+        return [];
+      }
+
+      return result.resources;
     } catch (error) {
       console.error('[Agent] Resource collection error:', error);
-      return this.getMockResources(mineralType, miningArea);
+      // PDF解析失败时返回空数据，不要使用幻觉数据
+      return [];
     }
   }
 
@@ -414,7 +466,7 @@ export class MiningAgent {
   }
 
   /**
-   * 获取模拟价格数据
+   * 获取模拟价格数据 - 基于实际市场的合理模拟
    */
   private getMockPrices(mineralType: string): Array<{
     commodity: string;
@@ -423,12 +475,22 @@ export class MiningAgent {
     low: number;
     trend: string;
   }> {
+    // 基于实际市场的合理模拟价格 (单位: 美元/吨)
+    const mockPrices: Record<string, { commodity: string; average: number; high: number; low: number }> = {
+      lithium: { commodity: 'Lithium Carbonate (LME)', average: 13500, high: 14200, low: 12800 },
+      'lithium-carbonate': { commodity: 'Lithium Carbonate (LME)', average: 13500, high: 14200, low: 12800 },
+      copper: { commodity: 'Copper (LME, USD/吨)', average: 8450, high: 8900, low: 8100 },
+      nickel: { commodity: 'Nickel (LME, USD/吨)', average: 16200, high: 17000, low: 15500 },
+      cobalt: { commodity: 'Cobalt (MB, USD/吨)', average: 33500, high: 35000, low: 32000 },
+      gold: { commodity: 'Gold (COMEX, USD/盎司)', average: 2320, high: 2380, low: 2260 },
+      silver: { commodity: 'Silver (COMEX, USD/盎司)', average: 29.5, high: 31, low: 28 },
+      'iron-ore': { commodity: 'Iron Ore (62% Fe, CFR)', average: 118, high: 125, low: 110 },
+    };
+
+    const data = mockPrices[mineralType] || mockPrices['lithium'];
     return [{
-      commodity: 'Lithium Carbonate',
-      average: 13500,
-      high: 14200,
-      low: 12800,
-      trend: 'up',
+      ...data,
+      trend: data.average > (data.high + data.low) / 2 ? 'up' : data.average < (data.high + data.low) / 2 ? 'down' : 'stable',
     }];
   }
 
@@ -531,15 +593,7 @@ export class MiningAgent {
     }
 
     // 从查询中提取矿种名称用于标题
-    const queryLower = state.query.toLowerCase();
-    let mineralName = '矿业';
-    if (queryLower.includes('锂') || queryLower.includes('lithium')) mineralName = '锂矿';
-    else if (queryLower.includes('铜') || queryLower.includes('copper')) mineralName = '铜矿';
-    else if (queryLower.includes('金') || queryLower.includes('gold')) mineralName = '金价';
-    else if (queryLower.includes('银') || queryLower.includes('silver')) mineralName = '银矿';
-    else if (queryLower.includes('镍') || queryLower.includes('nickel')) mineralName = '镍矿';
-    else if (queryLower.includes('钴') || queryLower.includes('cobalt')) mineralName = '钴矿';
-    else if (queryLower.includes('铁') || queryLower.includes('iron')) mineralName = '铁矿';
+    const mineralName = this.getMineralNameCN(state.query);
 
     // 筛选相关储量数据
     const relevantResources = state.resources.filter(r =>
@@ -553,13 +607,32 @@ export class MiningAgent {
       state.query.toLowerCase().includes(mineralName)
     );
 
-    // 筛选相关新闻
-    const relevantNews = state.newsArticles.filter(a =>
-      state.query.toLowerCase().includes('金') && (a.title.toLowerCase().includes('gold') || a.title.includes('金')) ||
-      state.query.toLowerCase().includes('锂') && (a.title.toLowerCase().includes('lithium') || a.title.includes('锂')) ||
-      state.query.toLowerCase().includes('铜') && (a.title.toLowerCase().includes('copper') || a.title.includes('铜')) ||
-      state.query.toLowerCase().includes(mineralName)
-    ) || state.newsArticles.slice(0, 3);
+    // 筛选相关新闻 - 正确实现
+    const relevantNews = state.newsArticles.filter(a => {
+      const titleLower = a.title.toLowerCase();
+      const summaryLower = a.summary.toLowerCase();
+      const queryLower = state.query.toLowerCase();
+
+      // 检查是否与查询的矿种相关
+      if (queryLower.includes('锂') || queryLower.includes('lithium')) {
+        return titleLower.includes('lithium') || titleLower.includes('锂') ||
+               summaryLower.includes('lithium') || summaryLower.includes('锂');
+      }
+      if (queryLower.includes('铜') || queryLower.includes('copper')) {
+        return titleLower.includes('copper') || titleLower.includes('铜');
+      }
+      if (queryLower.includes('金') || queryLower.includes('gold')) {
+        return titleLower.includes('gold') || titleLower.includes('金');
+      }
+      if (queryLower.includes('镍') || queryLower.includes('nickel')) {
+        return titleLower.includes('nickel') || titleLower.includes('镍');
+      }
+      if (queryLower.includes('钴') || queryLower.includes('cobalt')) {
+        return titleLower.includes('cobalt') || titleLower.includes('钴');
+      }
+      // 默认返回全部
+      return true;
+    });
 
     try {
       const prompt = `你是一个专业的矿业市场分析师。请根据以下信息生成一份专业的矿业市场分析日报。
@@ -571,40 +644,41 @@ export class MiningAgent {
 1. 报告标题必须包含矿种名称（如：金价、铜矿、锂矿）
 2. 只使用与查询相关的矿种数据，不要混入其他矿种
 3. 如果某些数据与查询无关，请忽略它
+4. 报告内容要详细全面，至少500字
 
 ## 矿区信息
 ${state.miningArea}
 
 ## 相关储量数据
-${relevantResources.length > 0 ? relevantResources.map(r => `- ${r.mininalType || r.mineralType}: 指示储量 ${r.indicatedReserves.toLocaleString()} ${r.unit}`).join('\n') : '暂无相关储量数据'}
+${relevantResources.length > 0 ? relevantResources.map(r => `- ${r.mineralType}: 指示储量 ${r.indicatedReserves.toLocaleString()} ${r.unit}`).join('\n') : '暂无相关储量数据（请提供NI 43-101报告链接）'}
 
 ## 相关价格数据
-${relevantPrices.length > 0 ? relevantPrices.map(p => `- ${p.commodity}: ¥${p.average.toLocaleString()}/吨 (${p.trend === 'up' ? '上涨📈' : p.trend === 'down' ? '下跌📉' : '平稳➡️'})`).join('\n') : '暂无相关价格数据'}
+${relevantPrices.length > 0 ? relevantPrices.map(p => `- ${p.commodity}: $${p.average.toLocaleString()}/吨 (${p.trend === 'up' ? '上涨📈' : p.trend === 'down' ? '下跌📉' : '平稳➡️'})`).join('\n') : '暂无相关价格数据'}
 
-## 相关新闻（请总结这些新闻要点）
-${relevantNews.map((a, i) => `${i + 1}. ${a.title}`).join('\n') || '暂无相关新闻'}
+## 相关新闻（请详细总结这些新闻要点）
+${relevantNews.length > 0 ? relevantNews.map((a, i) => `${i + 1}. ${a.title}\n   ${a.summary}`).join('\n\n') : '暂无相关新闻（可能RSS源暂时不可用）'}
 
 ## 风险提示
 ${state.riskWarnings.slice(0, 2).map(r => `- [${r.level.toUpperCase()}] ${r.title}: ${r.description}`).join('\n')}
 
-请用Markdown格式生成日报，结构如下（控制在400字以内）:
+请用Markdown格式生成日报，结构如下:
 
 # 🏔️ [矿种简称] 市场日报
 > 📅 [日期] | 🤖 AI分析
 
 ## 📰 今日要点
-[3-4句话总结相关新闻要点和价格走势，简洁有力]
+[详细总结相关新闻要点和价格走势，3-5句话]
 
 ## 📊 今日行情
-[只列出与查询相关的矿种数据，用表格展示]
+[只列出与查询相关的矿种数据，用表格展示，包含价格和储量]
 
 ## ⚠️ 风险提示
 [🔴高风险/🟡中风险/🟢低风险 + 简要描述]
 
 ## 📚 来源
-[列出1-2个新闻来源名称]
+[列出新闻来源名称]
 
-重要：只关注查询中提到的矿种，不要混入锂矿、铜矿等其他不相关的数据！`;
+重要：只关注查询中提到的矿种，不要混入其他不相关的数据！报告内容要详细，至少500字。`;
 
       const response = await this.llmClient.generate(prompt, {
         maxTokens: 4096,
@@ -628,31 +702,90 @@ ${state.riskWarnings.slice(0, 2).map(r => `- [${r.level.toUpperCase()}] ${r.titl
       day: 'numeric',
     });
 
-    // 精选新闻，只显示最重要的3条
-    const topNews = state.newsArticles.slice(0, 3);
+    // 根据查询确定矿种中文名称
+    const mineralName = this.getMineralNameCN(state.query);
 
-    let report = `# 🏔️ ${state.miningArea.split(',')[0]} 矿业日报
+    // 精选新闻 - 筛选与矿种相关的
+    const relevantNews = state.newsArticles.filter(article => {
+      const titleLower = article.title.toLowerCase();
+      const summaryLower = article.summary.toLowerCase();
+      const queryLower = state.query.toLowerCase();
 
-> 📅 ${date} | 🤖 自动生成
+      if (queryLower.includes('锂') || queryLower.includes('lithium')) {
+        return titleLower.includes('lithium') || titleLower.includes('锂');
+      }
+      if (queryLower.includes('铜') || queryLower.includes('copper')) {
+        return titleLower.includes('copper') || titleLower.includes('铜');
+      }
+      if (queryLower.includes('金') || queryLower.includes('gold')) {
+        return titleLower.includes('gold') || titleLower.includes('金');
+      }
+      return true;
+    });
+    const topNews = relevantNews.length > 0 ? relevantNews.slice(0, 3) : state.newsArticles.slice(0, 3);
+
+    // 构建新闻摘要
+    let newsSection = '';
+    if (topNews.length > 0) {
+      newsSection = topNews.map((article, i) => `**${i + 1}. ${article.title}**
+${article.summary.slice(0, 200)}${article.summary.length > 200 ? '...' : ''}
+*来源: ${article.source}*`).join('\n\n');
+    } else {
+      newsSection = `暂无${mineralName}相关新闻，可能原因:
+- RSS源暂时不可用
+- 网络连接问题
+- 暂无该矿种最新资讯`;
+    }
+
+    // 构建储量数据
+    let resourceSection = '';
+    if (state.resources.length > 0) {
+      resourceSection = `| 矿种 | 指示储量 | 推断储量 |
+|:-----|--------:|--------:|
+${state.resources.map(r => {
+  const unit = r.unit === 'tonnes' || r.unit === 'tonne' ? '吨' : r.unit;
+  return `| ${r.mineralType} | **${this.formatNumber(r.indicatedReserves)}** ${unit} | ${this.formatNumber(r.inferredReserves)} ${unit} |`;
+}).join('\n')}`;
+    } else {
+      resourceSection = `*暂无${mineralName}储量数据*
+
+如需获取储量信息，请提供:
+- NI 43-101技术报告PDF链接
+- 或具体矿区名称以便系统查询`;
+    }
+
+    // 构建价格数据
+    const priceSection = state.priceTrends.length > 0 ? state.priceTrends.map(p => {
+      const trendIcon = p.trend === 'up' ? '📈' : p.trend === 'down' ? '📉' : '➡️';
+      const trendText = p.trend === 'up' ? '上涨' : p.trend === 'down' ? '下跌' : '平稳';
+      return `| ${p.commodity} | **$${this.formatNumber(p.average)}**/吨 | $${this.formatNumber(p.low)} ~ $${this.formatNumber(p.high)} | ${trendIcon} ${trendText} |`;
+    }).join('\n') : '| - | - | - | - |';
+
+    // 构建来源
+    const sourceSection = state.sources.length > 0
+      ? state.sources.slice(0, 5).map(s => `- ${s}`).join('\n')
+      : '- 暂无来源数据';
+
+    // LLM警告
+    const llmWarning = !this.llmClient
+      ? '\n> *⚠️ 提示: 当前未配置LLM API，报告基于模板生成。如需更智能的分析，请配置API密钥。*'
+      : '';
+
+    let report = `# 🏔️ ${state.miningArea.split(',')[0]} ${mineralName}日报
+
+> 📅 ${date} | 🤖 自动生成 | 查询: "${state.query}"
 
 ---
 
 ## 📰 今日要闻
 
-${topNews.length > 0 ? topNews.map((article, i) => `**${i + 1}. ${article.title}**
-${article.summary.slice(0, 150)}${article.summary.length > 150 ? '...' : ''}
-*来源: ${article.source}*`).join('\n\n') : '*暂无最新新闻*'}
+${newsSection}
 
 ---
 
 ## 📊 储量数据
 
-| 矿种 | 指示储量 | 推断储量 |
-|:-----|--------:|--------:|
-${state.resources.map(r => {
-  const unit = r.unit === 'tonnes' || r.unit === 'tonne' ? '吨' : r.unit;
-  return `| ${r.mineralType} | **${this.formatNumber(r.indicatedReserves)}** ${unit} | ${this.formatNumber(r.inferredReserves)} ${unit} |`;
-}).join('\n')}
+${resourceSection}
 
 ---
 
@@ -660,11 +793,9 @@ ${state.resources.map(r => {
 
 | 商品 | 当前均价 | 30日区间 | 趋势 |
 |:-----|--------:|--------:|:----:|
-${state.priceTrends.map(p => {
-  const trendIcon = p.trend === 'up' ? '📈' : p.trend === 'down' ? '📉' : '➡️';
-  const trendText = p.trend === 'up' ? '上涨' : p.trend === 'down' ? '下跌' : '平稳';
-  return `| ${p.commodity} | **¥${this.formatNumber(p.average)}** | ¥${this.formatNumber(p.low)} ~ ¥${this.formatNumber(p.high)} | ${trendIcon} ${trendText} |`;
-}).join('\n')}
+${priceSection}
+
+> *注: 价格数据仅供参考，实际交易价格请以市场为准*
 
 ---
 
@@ -679,10 +810,9 @@ ${state.riskWarnings.map(r => {
 
 ## 📚 参考来源
 
-${state.sources.slice(0, 5).map(s => `- ${s}`).join('\n')}
+${sourceSection}
 
-> *本报告由矿权日报Agent自动生成 | 生成时间: ${new Date().toLocaleTimeString('zh-CN')}*
-`;
+> *本报告由矿权日报Agent自动生成 | 生成时间: ${new Date().toLocaleTimeString('zh-CN')}*${llmWarning}`;
     return report;
   }
 
