@@ -57,22 +57,32 @@ export class MiningAgent {
     this.anthropic = new Anthropic();
     this.model = process.env.ANTHROPIC_MODEL || 'claude-opus-4-7';
 
-    // 初始化MCP客户端 (使用本地包路径)
+    // 初始化MCP客户端
+    const isWindows = process.platform === 'win32';
+    // 使用绝对路径，从项目根目录运行
+    const rootDir = path.resolve(process.cwd(), '../..');
+
+    // Windows使用cmd执行tsx，Unix直接使用tsx
+    const tsxCmd = isWindows ? 'cmd' : 'tsx';
+    const tsxArgs = (pkg: string) => isWindows
+      ? ['/c', 'npx', 'tsx', path.join(rootDir, pkg, 'src/index.ts')]
+      : ['tsx', path.join(rootDir, pkg, 'src/index.ts')];
+
     this.newsClient = new MCPToolClient(
-      'npx',
-      ['tsx', '../mining-news-mcp/src/index.ts'],
+      tsxCmd,
+      tsxArgs('packages/mining-news-mcp'),
       'mining-news-mcp'
     );
 
     this.pdfClient = new MCPToolClient(
-      'npx',
-      ['tsx', '../mineral-pdf-mcp/src/index.ts'],
+      tsxCmd,
+      tsxArgs('packages/mineral-pdf-mcp'),
       'mineral-pdf-mcp'
     );
 
     this.priceClient = new MCPToolClient(
-      'npx',
-      ['tsx', '../lme-price-mcp/src/index.ts'],
+      tsxCmd,
+      tsxArgs('packages/lme-price-mcp'),
       'lme-price-mcp'
     );
   }
