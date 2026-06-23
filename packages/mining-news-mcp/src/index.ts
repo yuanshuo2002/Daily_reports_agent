@@ -37,7 +37,9 @@ const parser = new Parser();
 const RSS_SOURCES = [
   { name: 'Mining.com', url: 'https://www.mining.com/feed/', type: 'rss' },
   { name: 'Reuters Mining', url: 'https://feeds.reuters.com/reuters/businessNews', type: 'rss' },
-  { name: 'Financial Times Mining', url: 'https://www.ft.com/industries/markets-real-estate?format=rss', type: 'rss' },
+  // 国内矿业新闻源
+  { name: '中国矿业网', url: 'http://www.chinamining.org.cn/rss', type: 'rss' },
+  { name: '矿业圈', url: 'https://www.mining-circle.com/rss', type: 'rss' },
 ];
 
 // 关键词匹配规则
@@ -57,41 +59,47 @@ async function searchNews(query: string, days: number = 7): Promise<NewsSearchRe
   const minDate = new Date();
   minDate.setDate(minDate.getDate() - days);
 
-  try {
-    for (const source of RSS_SOURCES) {
-      try {
-        const feed = await parser.parseURL(source.url);
-        for (const item of feed.items) {
-          const title = item.title || '';
-          const link = item.link || '';
-          const pubDate = item.pubDate ? new Date(item.pubDate) : null;
+  const timeout = (ms: number) => new Promise<void>((_, reject) =>
+    setTimeout(() => reject(new Error('Timeout')), ms)
+  );
 
-          // 检查是否匹配查询
-          const matchesQuery = title.toLowerCase().includes(queryLower) ||
-                              (item.contentSnippet || '').toLowerCase().includes(queryLower);
+  for (const source of RSS_SOURCES) {
+    try {
+      // 每个源最多5秒超时
+      const feed = await Promise.race([
+        parser.parseURL(source.url),
+        timeout(5000)
+      ]);
 
-          // 检查是否是矿业相关内容
-          const matchesMining = MINING_KEYWORDS.some(
-            kw => title.toLowerCase().includes(kw.toLowerCase()) ||
-                  (item.contentSnippet || '').toLowerCase().includes(kw.toLowerCase())
-          );
+      for (const item of feed.items) {
+        const title = item.title || '';
+        const link = item.link || '';
+        const pubDate = item.pubDate ? new Date(item.pubDate) : null;
 
-          if ((matchesQuery || matchesMining) && pubDate && pubDate >= minDate) {
-            articles.push({
-              title,
-              url: link,
-              source: source.name,
-              publishedAt: pubDate.toISOString(),
-              summary: item.contentSnippet || item.content || '',
-            });
-          }
+        // 检查是否匹配查询
+        const matchesQuery = title.toLowerCase().includes(queryLower) ||
+                            (item.contentSnippet || '').toLowerCase().includes(queryLower);
+
+        // 检查是否是矿业相关内容
+        const matchesMining = MINING_KEYWORDS.some(
+          kw => title.toLowerCase().includes(kw.toLowerCase()) ||
+                (item.contentSnippet || '').toLowerCase().includes(kw.toLowerCase())
+        );
+
+        if ((matchesQuery || matchesMining) && pubDate && pubDate >= minDate) {
+          articles.push({
+            title,
+            url: link,
+            source: source.name,
+            publishedAt: pubDate.toISOString(),
+            summary: item.contentSnippet || item.content || '',
+          });
         }
-      } catch (err) {
-        console.error(`Error fetching from ${source.name}:`, err);
       }
+    } catch (err) {
+      // 单个源失败不影响其他源
+      console.error(`Skipping ${source.name} (${err instanceof Error ? err.message : 'error'})`);
     }
-  } catch (err) {
-    console.error('Error searching news:', err);
   }
 
   // 按日期排序
