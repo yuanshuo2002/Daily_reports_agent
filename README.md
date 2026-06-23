@@ -72,6 +72,3 @@ docker-compose up
 - **TypeScript** - 类型安全
 - **Docker** - 容器化部署
 
-## 许可证
-
-MIT
