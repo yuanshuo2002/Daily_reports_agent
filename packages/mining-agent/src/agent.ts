@@ -189,24 +189,64 @@ export class MiningAgent {
     summary: string;
     articles: DailyReportState['newsArticles'];
   } {
-    return {
-      summary: `关于 ${mineralType} 矿业的最新动态汇总`,
-      articles: [
+    // 根据矿种生成相关mock新闻
+    const mineralNews: Record<string, Array<{ title: string; summary: string }>> = {
+      lithium: [
         {
-          title: `Pilbara Minerals宣布扩产计划`,
-          url: 'https://example.com/pilbara-expansion',
-          source: 'Mining.com',
-          publishedAt: new Date().toISOString(),
-          summary: '澳大利亚锂矿商Pilbara Minerals宣布将在Pilbara地区扩大产能，预计年产量将提升30%。'
+          title: `${miningArea}地区锂矿项目进展顺利`,
+          summary: `该地区主要锂矿项目持续推进，扩产计划逐步落地，预计将显著提升锂资源供应能力。`
         },
         {
-          title: '全球锂价近期走势分析',
-          url: 'https://example.com/lithium-price-analysis',
-          source: 'Reuters',
-          publishedAt: new Date().toISOString(),
-          summary: '受新能源汽车需求推动，锂价持续保持高位，但市场对供应过剩的担忧有所缓解。'
+          title: '锂价持稳运行，下游采购情绪回暖',
+          summary: `碳酸锂价格保持稳定，新能源汽车需求持续增长，材料厂采购意愿有所提升，市场情绪有所好转。`
+        },
+        {
+          title: '澳洲锂矿出口量同比上升',
+          summary: `最新海关数据显示，澳大利亚锂辉石精矿出口量较去年同期增长，锂盐供应链保持平稳。`
+        }
+      ],
+      copper: [
+        {
+          title: `${miningArea}铜矿开采活跃`,
+          summary: `该地区铜矿项目推进中，矿山产量保持增长态势。`
+        },
+        {
+          title: '全球铜价维持高位',
+          summary: `受能源转型需求推动，铜价表现强劲，矿商盈利能力提升。`
+        },
+        {
+          title: '铜矿勘探活动增加',
+          summary: `全球范围内铜矿勘探投资增加，新项目储备提升。`
+        }
+      ],
+      default: [
+        {
+          title: `${miningArea}矿业动态`,
+          summary: `该地区矿业项目正常运营，市场供需基本平衡。`
+        },
+        {
+          title: '金属价格总体平稳',
+          summary: `全球金属市场整体平稳，主要品种价格波动不大。`
+        },
+        {
+          title: '矿业投资持续增长',
+          summary: `全球矿业投资保持增长态势，新项目陆续启动。`
         }
       ]
+    };
+
+    const news = mineralNews[mineralType] || mineralNews['default'];
+    const articles = news.map((n, i) => ({
+      title: n.title,
+      url: `https://example.com/news/${mineralType}-${i}`,
+      source: '矿业资讯',
+      publishedAt: new Date().toISOString(),
+      summary: n.summary
+    }));
+
+    return {
+      summary: `关于 ${miningArea} ${mineralType} 矿业的最新动态`,
+      articles
     };
   }
 
@@ -245,19 +285,33 @@ export class MiningAgent {
     inferredReserves: number;
     unit: string;
   }> {
-    return [
-      {
-        mineralType: 'Spodumene (Li2O)',
-        indicatedReserves: 1082000,
-        inferredReserves: 569000,
-        unit: 'tonnes',
-      },
-      {
-        mineralType: 'Lithium Carbonate Equivalent',
-        indicatedReserves: 256000,
-        inferredReserves: 134000,
-        unit: 'tonnes',
-      },
+    // 根据矿种返回不同的mock数据
+    const resourceData: Record<string, Array<{ mineralType: string; indicatedReserves: number; inferredReserves: number; unit: string }>> = {
+      lithium: [
+        { mineralType: '锂辉石 (Spodumene)', indicatedReserves: 1082000, inferredReserves: 569000, unit: '吨' },
+        { mineralType: '碳酸锂当量 (LCE)', indicatedReserves: 256000, inferredReserves: 134000, unit: '吨' },
+      ],
+      copper: [
+        { mineralType: '铜精矿', indicatedReserves: 850000, inferredReserves: 420000, unit: '吨' },
+        { mineralType: '电解铜', indicatedReserves: 320000, inferredReserves: 180000, unit: '吨' },
+      ],
+      gold: [
+        { mineralType: '金矿石', indicatedReserves: 125000, inferredReserves: 68000, unit: '盎司' },
+        { mineralType: '含金量', indicatedReserves: 3886, inferredReserves: 2114, unit: '吨' },
+      ],
+      nickel: [
+        { mineralType: '镍精矿', indicatedReserves: 420000, inferredReserves: 280000, unit: '吨' },
+      ],
+      cobalt: [
+        { mineralType: '钴矿石', indicatedReserves: 85000, inferredReserves: 52000, unit: '吨' },
+      ],
+      'iron-ore': [
+        { mineralType: '铁矿石', indicatedReserves: 125000000, inferredReserves: 68000000, unit: '吨' },
+      ],
+    };
+
+    return resourceData[mineralType] || [
+      { mineralType: `${mineralType}矿石`, indicatedReserves: 500000, inferredReserves: 300000, unit: '吨' },
     ];
   }
 
@@ -326,50 +380,77 @@ export class MiningAgent {
 
     // 基于价格趋势的风险
     for (const trend of priceTrends) {
-      if (trend.trend === 'up') {
+      if (trend.trend === 'up' && trend.high > 0) {
+        const changePercent = ((trend.high - trend.low) / trend.low * 100).toFixed(1);
         warnings.push({
           level: 'medium',
-          title: '价格上涨风险',
-          description: `${trend.commodity}价格持续上涨，需关注下游成本压力。`,
+          title: '价格波动风险',
+          description: `${trend.commodity}近30日价格上涨，波动幅度${changePercent}%，需关注下游采购节奏。`,
         });
       } else if (trend.trend === 'down') {
         warnings.push({
           level: 'high',
-          title: '价格下跌风险',
-          description: `${trend.commodity}价格呈下降趋势，市场可能面临调整。`,
+          title: '价格下行风险',
+          description: `${trend.commodity}价格持续走低，当前均价较周期高点下跌${((1 - trend.average / trend.high) * 100).toFixed(0)}%，市场承压。`,
         });
       }
     }
 
-    // 基于新闻的风险
-    for (const article of newsArticles) {
+    // 基于新闻的风险分析
+    for (const article of newsArticles.slice(0, 3)) {
       const titleLower = article.title.toLowerCase();
-      if (titleLower.includes('shutdown') || titleLower.includes('停产')) {
+
+      // 供应相关风险
+      if (titleLower.includes('shutdown') || titleLower.includes('停产') ||
+          titleLower.includes('curtail') || titleLower.includes('减产')) {
         warnings.push({
           level: 'high',
-          title: '供应中断风险',
-          description: `有报道称出现停产情况: ${article.title}`,
+          title: '供应扰动',
+          description: `${article.title}，可能影响短期市场供需格局。`,
         });
       }
-      if (titleLower.includes('environmental') || titleLower.includes('环保')) {
+
+      // 政策/环保风险
+      if (titleLower.includes('environmental') || titleLower.includes('环保') ||
+          titleLower.includes('regulation') || titleLower.includes('policy')) {
         warnings.push({
           level: 'medium',
-          title: '环保合规风险',
-          description: `涉及环保问题: ${article.title}`,
+          title: '政策风险',
+          description: `${article.title}，需关注后续政策动向。`,
+        });
+      }
+
+      // 价格相关风险
+      if (titleLower.includes('price') && (titleLower.includes('fall') ||
+          titleLower.includes('drop') || titleLower.includes('下跌'))) {
+        warnings.push({
+          level: 'medium',
+          title: '价格压力',
+          description: `${article.title}。`,
         });
       }
     }
 
-    // 默认风险提示
-    if (warnings.length === 0) {
+    // 市场供需风险
+    if (newsArticles.length < 3) {
       warnings.push({
         level: 'low',
-        title: '市场观察',
-        description: '目前未发现明显风险信号，建议持续关注市场动态。',
+        title: '信息有限',
+        description: '近期相关新闻较少，市场动态需持续跟踪。',
       });
     }
 
-    return warnings;
+    // 如果没有发现风险，添加一条市场观察
+    if (warnings.length === 0) {
+      warnings.push({
+        level: 'low',
+        title: '市场平稳',
+        description: '暂未发现明显风险信号，建议持续关注价格走势和供需变化。',
+      });
+    }
+
+    // 限制风险提示数量
+    return warnings.slice(0, 4);
   }
 
   /**
@@ -476,7 +557,10 @@ ${article.summary.slice(0, 150)}${article.summary.length > 150 ? '...' : ''}
 
 | 矿种 | 指示储量 | 推断储量 |
 |:-----|--------:|--------:|
-${state.resources.map(r => `| ${r.mineralType} | **${this.formatNumber(r.indicatedReserves)}** ${r.unit} | ${this.formatNumber(r.inferredReserves)} ${r.unit} |`).join('\n')}
+${state.resources.map(r => {
+  const unit = r.unit === 'tonnes' || r.unit === 'tonne' ? '吨' : r.unit;
+  return `| ${r.mineralType} | **${this.formatNumber(r.indicatedReserves)}** ${unit} | ${this.formatNumber(r.inferredReserves)} ${unit} |`;
+}).join('\n')}
 
 ---
 
