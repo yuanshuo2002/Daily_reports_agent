@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>矿权日报 Agent</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      min-height: 100vh;
+      color: #e0e0e0;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    header {
+      text-align: center;
+      padding: 30px 0;
+    }
+
+    header h1 {
+      font-size: 2.5rem;
+      background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 10px;
+    }
+
+    header p {
+      color: #888;
+      font-size: 1rem;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      color: #ccc;
+    }
+
+    textarea {
+      width: 100%;
+      padding: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.3);
+      color: #fff;
+      font-size: 1rem;
+      resize: vertical;
+      min-height: 100px;
+      transition: border-color 0.3s;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: #00d4ff;
+    }
+
+    textarea::placeholder {
+      color: #666;
+    }
+
+    .presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .preset-btn {
+      padding: 8px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 20px;
+      background: transparent;
+      color: #aaa;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-size: 0.9rem;
+    }
+
+    .preset-btn:hover {
+      background: rgba(0, 212, 255, 0.2);
+      border-color: #00d4ff;
+      color: #00d4ff;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 12px;
+    }
+
+    button {
+      padding: 14px 28px;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #00d4ff, #0077b6);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0, 212, 255, 0.3);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: #ccc;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .report-section {
+      display: none;
+    }
+
+    .report-section.active {
+      display: block;
+    }
+
+    .report-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .report-meta {
+      display: flex;
+      gap: 16px;
+      color: #888;
+      font-size: 0.9rem;
+    }
+
+    .report-meta span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .report-content {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 10px;
+      padding: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      max-height: 500px;
+      overflow-y: auto;
+      line-height: 1.8;
+    }
+
+    .report-content h1 {
+      font-size: 1.8rem;
+      margin-bottom: 20px;
+      color: #fff;
+    }
+
+    .report-content h2 {
+      font-size: 1.3rem;
+      color: #00d4ff;
+      margin: 24px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .report-content h3 {
+      font-size: 1.1rem;
+      color: #ccc;
+      margin: 16px 0 8px;
+    }
+
+    .report-content table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+    }
+
+    .report-content th,
+    .report-content td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .report-content th {
+      color: #00d4ff;
+      font-weight: 600;
+    }
+
+    .report-content a {
+      color: #00d4ff;
+      text-decoration: none;
+    }
+
+    .report-content a:hover {
+      text-decoration: underline;
+    }
+
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 40px;
+    }
+
+    .loading.active {
+      display: block;
+    }
+
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top-color: #00d4ff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .error {
+      background: rgba(255, 82, 82, 0.1);
+      border: 1px solid rgba(255, 82, 82, 0.3);
+      border-radius: 10px;
+      padding: 16px;
+      color: #ff6b6b;
+      display: none;
+    }
+
+    .error.active {
+      display: block;
+    }
+
+    footer {
+      text-align: center;
+      padding: 20px;
+      color: #666;
+      font-size: 0.85rem;
+    }
+
+    footer a {
+      color: #00d4ff;
+      text-decoration: none;
+    }
+
+    @media (max-width: 600px) {
+      .container {
+        padding: 12px;
+      }
+
+      header h1 {
+        font-size: 1.8rem;
+      }
+
+      .btn-group {
+        flex-direction: column;
+      }
+
+      button {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>矿权日报 Agent</h1>
+      <p>基于 MCP 协议的矿业信息聚合智能代理</p>
+    </header>
+
+    <div class="card">
+      <div class="form-group">
+        <label for="query">查询内容</label>
+        <div class="presets">
+          <button class="preset-btn" data-query="给我生成一份关于 Pilbara 锂矿的今日简报">Pilbara 锂矿</button>
+          <button class="preset-btn" data-query="分析 Atacama 盐湖的锂矿情况">Atacama 盐湖</button>
+          <button class="preset-btn" data-query="查看 Nevada 铜矿的情况">Nevada 铜矿</button>
+          <button class="preset-btn" data-query="分析全球金价走势">金价走势</button>
+        </div>
+        <textarea id="query" placeholder="输入您想查询的内容，例如：&#10;• 给我生成一份关于 Pilbara 锂矿的今日简报&#10;• 分析一下 Atacama 盐湖的锂矿情况&#10;• 查看 Nevada 铜矿情况"></textarea>
+      </div>
+      <div class="btn-group">
+        <button class="btn-primary" id="generateBtn" onclick="generateReport()">
+          <span>⚡</span> 生成日报
+        </button>
+        <button class="btn-secondary" id="saveBtn" onclick="saveReport()" disabled>
+          <span>💾</span> 保存报告
+        </button>
+      </div>
+    </div>
+
+    <div class="error" id="errorMsg"></div>
+
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p>正在生成日报，请稍候...</p>
+    </div>
+
+    <div class="card report-section" id="reportSection">
+      <div class="report-header">
+        <div class="report-meta">
+          <span>📅 <span id="reportDate"></span></span>
+          <span>📍 <span id="reportArea"></span></span>
+        </div>
+      </div>
+      <div class="report-content" id="reportContent"></div>
+    </div>
+
+    <footer>
+      <p>基于 <a href="https://github.com/yuanshuo2002/Daily_reports_agent" target="_blank">MCP 协议</a> 构建 | 矿业信息聚合系统</p>
+    </footer>
+  </div>
+
+  <script>
+    let currentReport = '';
+
+    // 预设按钮点击
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.getElementById('query').value = btn.dataset.query;
+      });
+    });
+
+    async function generateReport() {
+      const query = document.getElementById('query').value.trim();
+      if (!query) {
+        showError('请输入查询内容');
+        return;
+      }
+
+      hideError();
+      showLoading();
+      hideReport();
+      disableButtons(true);
+
+      try {
+        const response = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query })
+        });
+
+        if (!response.ok) {
+          throw new Error(`请求失败: ${response.status}`);
+        }
+
+        const data = await response.json();
+        currentReport = data.report;
+
+        // 解析报告元数据
+        const dateMatch = data.report.match(/日期[:：]\s*(.+)/);
+        const areaMatch = data.report.match(/矿区[:：]\s*(.+)/);
+
+        if (dateMatch) document.getElementById('reportDate').textContent = dateMatch[1];
+        if (areaMatch) document.getElementById('reportArea').textContent = areaMatch[1];
+
+        document.getElementById('reportContent').innerHTML = marked.parse(data.report);
+        showReport();
+      } catch (error) {
+        console.error('Error:', error);
+        showError('生成报告失败: ' + error.message);
+      } finally {
+        hideLoading();
+        disableButtons(false);
+      }
+    }
+
+    function saveReport() {
+      if (!currentReport) return;
+
+      const blob = new Blob([currentReport], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const date = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `mining-report-${date}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('errorMsg');
+      el.textContent = msg;
+      el.classList.add('active');
+    }
+
+    function hideError() {
+      document.getElementById('errorMsg').classList.remove('active');
+    }
+
+    function showLoading() {
+      document.getElementById('loading').classList.add('active');
+    }
+
+    function hideLoading() {
+      document.getElementById('loading').classList.remove('active');
+    }
+
+    function showReport() {
+      document.getElementById('reportSection').classList.add('active');
+      document.getElementById('saveBtn').disabled = false;
+    }
+
+    function hideReport() {
+      document.getElementById('reportSection').classList.remove('active');
+      document.getElementById('saveBtn').disabled = true;
+    }
+
+    function disableButtons(disabled) {
+      document.getElementById('generateBtn').disabled = disabled;
+      document.getElementById('saveBtn').disabled = disabled || !currentReport;
+    }
+
+    // 简单的 Markdown 解析
+    const marked = {
+      parse: function(text) {
+        // 基本转换
+        let html = text
+          // 标题
+          .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+          .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+          .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+          // 粗体
+          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+          // 链接
+          .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank">$1</a>')
+          // 换行
+          .replace(/\n\n/g, '</p><p>')
+          // 列表
+          .replace(/^- (.+)$/gm, '<li>$1</li>');
+
+        // 表格处理
+        html = html.replace(/\|(.+)\|/g, (match) => {
+          const cells = match.split('|').filter(c => c.trim());
+          if (cells.some(c => c.includes('---'))) return '';
+          const isHeader = cells.some(c => c.match(/^[-\s]+$/));
+          if (isHeader) return '';
+          const tag = 'td';
+          return '<tr>' + cells.map(c => `<${tag}>${c.trim()}</${tag}>`).join('') + '</tr>';
+        });
+
+        return `<p>${html}</p>`
+          .replace(/<p><li>/g, '<ul><li>')
+          .replace(/<\/li><\/p>/g, '</li></ul>')
+          .replace(/<p><tr>/g, '<table><tr>')
+          .replace(/<\/tr><\/p>/g, '</tr></table>')
+          .replace(/<p><h/g, '<h')
+          .replace(/<\/h(\d)><\/p>/g, '</h$1>');
+      }
+    };
+  </script>
+</body>
+</html>
