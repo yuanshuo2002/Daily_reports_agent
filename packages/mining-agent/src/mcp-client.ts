@@ -1,11 +1,11 @@
 /**
  * MCP工具客户端
  *
- * 连接并调用MCP服务器的stdio接口
+ * 使用child_process与MCP服务器通过stdio通信
  */
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientParameters } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { spawn } from 'child_process';
+import { EventEmitter } from 'events';
 
 export interface MCPTool {
   name: string;
@@ -17,67 +17,173 @@ export interface MCPTool {
   };
 }
 
-export class MCPToolClient {
-  private client: Client;
-  private toolList: MCPTool[] = [];
+export interface MCPResponse {
+  content?: Array<{ type: string; text: string }>;
+  isError?: boolean;
+}
 
-  constructor(command: string, args: string[], name: string) {
-    this.client = new Client(
-      {
-        name,
-        version: '1.0.0',
-      },
-      {
-        capabilities: {
-          tools: {},
-        },
-      }
-    );
+export class MCPToolClient extends EventEmitter {
+  private process: ReturnType<typeof spawn> | null = null;
+  private messageId: number = 0;
+  private pendingRequests: Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }> = new Map();
+  private buffer: string = '';
+  private connected: boolean = false;
+  private tools: MCPTool[] = [];
 
-    this.connect(command, args);
+  constructor(
+    public readonly command: string,
+    public readonly args: string[],
+    public readonly name: string
+  ) {
+    super();
   }
 
-  private async connect(command: string, args: string[]): Promise<void> {
-    const params: StdioClientParameters = {
-      command,
-      args,
-    };
+  async connect(): Promise<void> {
+    if (this.connected) return;
 
-    await this.client.connect(params);
-    await this.loadTools();
+    return new Promise((resolve, reject) => {
+      this.process = spawn(this.command, this.args, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env },
+      });
+
+      this.process.stdout?.on('data', (data: Buffer) => {
+        this.buffer += data.toString();
+        this.processBuffer();
+      });
+
+      this.process.stderr?.on('data', (data: Buffer) => {
+        const error = data.toString();
+        // MCP服务器运行时输出
+        if (error.includes('running on stdio')) {
+          console.error(`[${this.name}] Connected`);
+        } else if (error.includes('Error')) {
+          console.error(`[${this.name}] Error:`, error);
+        }
+      });
+
+      this.process.on('error', (error) => {
+        console.error(`[${this.name}] Process error:`, error);
+        reject(error);
+      });
+
+      this.process.on('close', (code) => {
+        console.error(`[${this.name}] Process closed with code:`, code);
+        this.connected = false;
+      });
+
+      // 等待连接完成
+      setTimeout(() => {
+        this.connected = true;
+        this.loadTools().then(() => resolve()).catch(reject);
+      }, 1000);
+    });
+  }
+
+  private processBuffer(): void {
+    const lines = this.buffer.split('\n');
+    this.buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+
+      try {
+        const message = JSON.parse(line);
+
+        // 处理JSON-RPC响应
+        if (message.id && this.pendingRequests.has(message.id)) {
+          const pending = this.pendingRequests.get(message.id)!;
+          this.pendingRequests.delete(message.id);
+
+          if (message.error) {
+            pending.reject(new Error(message.error.message || message.error));
+          } else {
+            pending.resolve(message.result);
+          }
+        }
+      } catch {
+        // 忽略非JSON输出
+      }
+    }
   }
 
   private async loadTools(): Promise<void> {
-    const response = await this.client.request(
-      { method: 'tools/list' },
-      { method: 'tools/list', params: {} }
-    );
-    this.toolList = response.tools as MCPTool[];
+    try {
+      const response = await this.request('tools/list', {});
+      this.tools = (response as { tools: MCPTool[] }).tools || [];
+      console.error(`[${this.name}] Loaded ${this.tools.length} tools`);
+    } catch (error) {
+      console.error(`[${this.name}] Failed to load tools:`, error);
+      this.tools = [];
+    }
+  }
+
+  private request(method: string, params: Record<string, unknown>): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+      if (!this.process || !this.process.stdin) {
+        reject(new Error('Process not connected'));
+        return;
+      }
+
+      const id = ++this.messageId;
+      const message = {
+        jsonrpc: '2.0',
+        id,
+        method,
+        params,
+      };
+
+      this.pendingRequests.set(id, { resolve, reject });
+      this.process.stdin.write(JSON.stringify(message) + '\n');
+
+      // 超时处理
+      setTimeout(() => {
+        if (this.pendingRequests.has(id)) {
+          this.pendingRequests.delete(id);
+          reject(new Error(`Request ${method} timed out`));
+        }
+      }, 30000);
+    });
   }
 
   getTools(): MCPTool[] {
-    return this.toolList;
+    return this.tools;
   }
 
   async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
-    const response = await this.client.request(
-      { method: 'tools/call', params: { name, arguments: args } },
-      { method: 'tools/call', params: { name, arguments: args } }
-    );
-
-    // 解析响应内容
-    const content = (response as { content: Array<{ type: string; text: string }> }).content;
-    if (content && content.length > 0 && content[0].type === 'text') {
-      try {
-        return JSON.parse(content[0].text);
-      } catch {
-        return content[0].text;
-      }
+    if (!this.connected) {
+      throw new Error('Not connected. Call connect() first.');
     }
-    return response;
+
+    try {
+      const response = await this.request('tools/call', { name, arguments: args });
+      const result = response as MCPResponse;
+
+      if (result.isError) {
+        throw new Error((result.content?.[0] as { text: string })?.text || 'Unknown error');
+      }
+
+      if (result.content && result.content[0]?.type === 'text') {
+        try {
+          return JSON.parse(result.content[0].text);
+        } catch {
+          return result.content[0].text;
+        }
+      }
+
+      return result;
+    } catch (error) {
+      console.error(`[${this.name}] Tool call failed:`, error);
+      throw error;
+    }
   }
 
   async disconnect(): Promise<void> {
-    await this.client.close();
+    if (this.process) {
+      this.process.kill();
+      this.process = null;
+    }
+    this.connected = false;
+    this.tools = [];
   }
 }

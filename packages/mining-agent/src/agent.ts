@@ -57,26 +57,36 @@ export class MiningAgent {
     this.anthropic = new Anthropic();
     this.model = process.env.ANTHROPIC_MODEL || 'claude-opus-4-7';
 
-    // 初始化MCP客户端
-    const rootDir = path.resolve(process.cwd(), '../..');
-
+    // 初始化MCP客户端 (使用本地包路径)
     this.newsClient = new MCPToolClient(
       'npx',
-      ['-y', '@anthropic-ai/mcp-server'],
+      ['tsx', '../mining-news-mcp/src/index.ts'],
       'mining-news-mcp'
     );
 
     this.pdfClient = new MCPToolClient(
       'npx',
-      ['-y', '@anthropic-ai/mcp-server'],
+      ['tsx', '../mineral-pdf-mcp/src/index.ts'],
       'mineral-pdf-mcp'
     );
 
     this.priceClient = new MCPToolClient(
       'npx',
-      ['-y', '@anthropic-ai/mcp-server'],
+      ['tsx', '../lme-price-mcp/src/index.ts'],
       'lme-price-mcp'
     );
+  }
+
+  async initialize(): Promise<void> {
+    try {
+      await Promise.all([
+        this.newsClient.connect(),
+        this.pdfClient.connect(),
+        this.priceClient.connect(),
+      ]);
+    } catch (error) {
+      console.error('MCP连接失败，将使用模拟数据:', error);
+    }
   }
 
   /**
@@ -105,7 +115,6 @@ export class MiningAgent {
 
     // 检测矿种
     const mineralTypes: Record<string, string> = {
-      'lithium': 'lithium',
       'lithium': 'lithium',
       '锂': 'lithium',
       'copper': 'copper',
@@ -499,6 +508,9 @@ ${state.sources.map(s => `- ${s}`).join('\n')}
   async generateDailyReport(query: string): Promise<string> {
     console.error('[Agent] Starting daily report generation...');
     console.error(`[Agent] Query: ${query}`);
+
+    // 初始化MCP连接
+    await this.initialize();
 
     // 解析查询
     const { miningArea, mineralType } = this.parseQuery(query);
