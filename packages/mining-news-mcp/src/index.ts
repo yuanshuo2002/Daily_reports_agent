@@ -12,10 +12,24 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import type { NewsArticle, NewsSearchResult } from '../../shared/src/index.js';
 import Parser from 'rss-parser';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
+
+interface NewsArticle {
+  title: string;
+  url: string;
+  source: string;
+  publishedAt: string;
+  summary: string;
+  content?: string;
+}
+
+interface NewsSearchResult {
+  articles: NewsArticle[];
+  totalResults: number;
+  query: string;
+}
 
 const parser = new Parser();
 

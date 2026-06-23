@@ -24,5 +24,8 @@
     "llm"
   ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/pdf-parse": "^1.1.5"
+  }
 }
