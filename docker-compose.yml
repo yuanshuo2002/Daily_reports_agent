@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # 矿业新闻MCP服务器
+  mining-news-mcp:
+    build:
+      context: ./packages/mining-news-mcp
+      dockerfile: Dockerfile
+    container_name: mining-news-mcp
+    restart: unless-stopped
+    networks:
+      - mining-agent-network
+
+  # 矿物PDF解析MCP服务器
+  mineral-pdf-mcp:
+    build:
+      context: ./packages/mineral-pdf-mcp
+      dockerfile: Dockerfile
+    container_name: mineral-pdf-mcp
+    restart: unless-stopped
+    networks:
+      - mining-agent-network
+
+  # LME价格MCP服务器
+  lme-price-mcp:
+    build:
+      context: ./packages/lme-price-mcp
+      dockerfile: Dockerfile
+    container_name: lme-price-mcp
+    restart: unless-stopped
+    networks:
+      - mining-agent-network
+
+  # 主Agent服务
+  mining-agent:
+    build:
+      context: ./packages/mining-agent
+      dockerfile: Dockerfile
+    container_name: mining-agent
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-opus-4-7}
+    volumes:
+      - ./reports:/app/reports
+    depends_on:
+      - mining-news-mcp
+      - mineral-pdf-mcp
+      - lme-price-mcp
+    networks:
+      - mining-agent-network
+    command: ["npx", "tsx", "src/cli.ts", "给我生成一份关于 Pilbara 锂矿的今日简报"]
+
+networks:
+  mining-agent-network:
+    driver: bridge

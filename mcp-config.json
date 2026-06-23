@@ -1,0 +1,21 @@
+# MCP Servers Configuration for Claude Desktop / Cursor
+
+{
+  "mcpServers": {
+    "mining-news-mcp": {
+      "command": "npx",
+      "args": ["-y", "@mining-agent/mining-news-mcp"],
+      "env": {}
+    },
+    "mineral-pdf-mcp": {
+      "command": "npx",
+      "args": ["-y", "@mining-agent/mineral-pdf-mcp"],
+      "env": {}
+    },
+    "lme-price-mcp": {
+      "command": "npx",
+      "args": ["-y", "@mining-agent/lme-price-mcp"],
+      "env": {}
+    }
+  }
+}

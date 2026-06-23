@@ -1,0 +1,28 @@
+{
+  "name": "mining-daily-report-agent",
+  "version": "1.0.0",
+  "description": "矿权日报Agent - 基于MCP协议的矿业信息聚合系统",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "docker-compose up",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "clean": "docker-compose down -v && rm -rf packages/*/dist node_modules package-lock.json"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "keywords": [
+    "mcp",
+    "mining",
+    "agent",
+    "langgraph",
+    "llm"
+  ],
+  "author": "",
+  "license": "MIT"
+}
