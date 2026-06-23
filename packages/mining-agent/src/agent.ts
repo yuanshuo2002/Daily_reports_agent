@@ -240,20 +240,23 @@ export class MiningAgent {
     console.error('[Agent] Collecting news...');
 
     try {
-      // 直接调用MCP服务
       const tools = this.newsClient.getTools();
       if (tools.length === 0) {
         console.error('[Agent] News MCP not connected, using mock data');
         return this.getMockNews(mineralType, miningArea);
       }
 
-      const result = await this.newsClient.callTool('search', {
-        query: `${mineralType} ${miningArea}`,
-        days: 7,
-      }) as { articles?: DailyReportState['newsArticles']; totalResults?: number };
+      // 使用Promise.race实现非阻塞超时
+      const result = await Promise.race([
+        this.newsClient.callTool('search', {
+          query: `${mineralType} ${miningArea}`,
+          days: 7,
+        }) as Promise<{ articles?: DailyReportState['newsArticles']; totalResults?: number }>,
+        new Promise<null>((_, reject) => setTimeout(() => reject(new Error('News timeout')), 3000)),
+      ]) as { articles?: DailyReportState['newsArticles']; totalResults?: number };
 
-      const articles = result.articles || [];
-      const summary = `找到 ${result.totalResults || articles.length} 条相关新闻`;
+      const articles = result?.articles || [];
+      const summary = `找到 ${result?.totalResults || articles.length} 条相关新闻`;
 
       return { summary, articles };
     } catch (error) {
@@ -363,32 +366,37 @@ export class MiningAgent {
   /**
    * 收集储量数据
    */
-  private async collectResources(mineralType: string, miningArea: string): Promise<
+  private async collectResources(mineralType: string, miningArea: string, query: string = ''): Promise<
     Array<{ mineralType: string; indicatedReserves: number; inferredReserves: number; unit: string }>
   > {
     console.error('[Agent] Collecting resource data...');
 
+    // 检查查询中是否包含PDF链接，如果没有则跳过
+    const queryHasPdfLink = query.match(/\.pdf$/i);
+    if (!queryHasPdfLink) {
+      console.error('[Agent] No PDF URL in query, skipping resource extraction');
+      return [];
+    }
+
     try {
       const tools = this.pdfClient.getTools();
       if (tools.length === 0) {
-        console.error('[Agent] PDF MCP not connected, using mock data');
-        return this.getMockResources(mineralType, miningArea);
+        console.error('[Agent] PDF MCP not connected');
+        return [];
       }
 
       const result = await this.pdfClient.callTool('extract_resources', {
-        pdf_url: `https://example.com/ni43-101/${miningArea.toLowerCase().replace(/\s+/g, '-')}.pdf`,
+        pdf_url: queryHasPdfLink[0],
       }) as { resources?: Array<{ mineralType: string; indicatedReserves: number; inferredReserves: number; unit: string }> };
 
-      // 如果返回空数组，说明没有找到相关报告，不要使用mock数据
       if (!result.resources || result.resources.length === 0) {
-        console.error('[Agent] No resources found in PDF, returning empty');
+        console.error('[Agent] No resources found in PDF');
         return [];
       }
 
       return result.resources;
     } catch (error) {
       console.error('[Agent] Resource collection error:', error);
-      // PDF解析失败时返回空数据，不要使用幻觉数据
       return [];
     }
   }
@@ -642,51 +650,20 @@ export class MiningAgent {
         day: 'numeric',
       });
 
-      const prompt = `你是一个专业的矿业市场分析师。请根据以下信息生成一份专业的矿业市场分析日报。
+      // 精简的提示词，减少token消耗
+      const prompt = `矿业市场日报 | 日期: ${currentDate} | 查询: "${state.query}"
 
-## 用户查询
-"${state.query}"
+矿区: ${state.miningArea}
+储量: ${relevantResources.length > 0 ? relevantResources.map(r => `${r.mineralType}: ${r.indicatedReserves.toLocaleString()} ${r.unit}`).join(', ') : '暂无'}
+价格: ${relevantPrices.length > 0 ? relevantPrices.map(p => `${p.commodity}: $${p.average}/吨 ${p.trend === 'up' ? '↑' : p.trend === 'down' ? '↓' : '→'}`).join(', ') : '暂无'}
+新闻: ${relevantNews.length > 0 ? relevantNews.map((a, i) => `${i+1}. ${a.title}`).join('; ') : '暂无'}
+风险: ${state.riskWarnings.slice(0, 2).map(r => r.title).join(', ')}
 
-## 重要指令
-1. 报告标题必须包含矿种名称（如：金价、铜矿、锂矿）
-2. 只使用与查询相关的矿种数据，不要混入其他矿种
-3. 如果某些数据与查询无关，请忽略它
-4. 报告内容要详细全面，至少500字
-5. **必须使用以下日期格式: ${currentDate}**，不要自己编造日期！
-
-## 矿区信息
-${state.miningArea}
-
-## 相关储量数据
-${relevantResources.length > 0 ? relevantResources.map(r => `- ${r.mineralType}: 指示储量 ${r.indicatedReserves.toLocaleString()} ${r.unit}`).join('\n') : '暂无相关储量数据（请提供NI 43-101报告链接）'}
-
-## 相关价格数据
-${relevantPrices.length > 0 ? relevantPrices.map(p => `- ${p.commodity}: $${p.average.toLocaleString()}/吨 (${p.trend === 'up' ? '上涨📈' : p.trend === 'down' ? '下跌📉' : '平稳➡️'})`).join('\n') : '暂无相关价格数据'}
-
-## 相关新闻（请详细总结这些新闻要点）
-${relevantNews.length > 0 ? relevantNews.map((a, i) => `${i + 1}. ${a.title}\n   ${a.summary}`).join('\n\n') : '暂无相关新闻（可能RSS源暂时不可用）'}
-
-## 风险提示
-${state.riskWarnings.slice(0, 2).map(r => `- [${r.level.toUpperCase()}] ${r.title}: ${r.description}`).join('\n')}
-
-请用Markdown格式生成日报，结构如下:
-
-# 🏔️ [矿种简称] 市场日报
-> 📅 ${currentDate} | 🤖 AI分析
-
-## 📰 今日要点
-[详细总结相关新闻要点和价格走势，3-5句话]
-
-## 📊 今日行情
-[只列出与查询相关的矿种数据，用表格展示，包含价格和储量]
-
-## ⚠️ 风险提示
-[🔴高风险/🟡中风险/🟢低风险 + 简要描述]
-
-## 📚 来源
-[列出新闻来源名称]
-
-重要：只关注查询中提到的矿种，不要混入其他不相关的数据！报告内容要详细，至少500字。**日期必须是: ${currentDate}**`;
+要求:
+- 标题包含矿种名称
+- 只用查询相关数据
+- Markdown格式，500字以上
+- 日期必须用: ${currentDate}`;
 
       const response = await this.llmClient.generate(prompt, {
         maxTokens: 4096,
@@ -865,7 +842,7 @@ ${sourceSection}
     // 收集所有数据
     const [newsData, resources, priceTrends] = await Promise.all([
       this.collectNews(mineralType, miningArea),
-      this.collectResources(mineralType, miningArea),
+      this.collectResources(mineralType, miningArea, query),
       this.collectPrices(mineralType),
     ]);
 

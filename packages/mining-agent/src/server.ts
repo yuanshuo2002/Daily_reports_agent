@@ -4,10 +4,15 @@
  * 提供UI界面和API接口
  */
 
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+
+// 加载 .env 文件，确保能找到 packages/mining-agent/.env
+dotenv.config({ path: path.join(process.cwd(), '.env') });
+
 import express from 'express';
 import { MiningAgent } from './agent.js';
 import { getModelsForUI, getModelInfo } from './llm-client.js';
-import * as path from 'path';
 
 const app = express();
 const PORT = process.env.PORT || 3000;

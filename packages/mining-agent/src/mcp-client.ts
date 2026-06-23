@@ -54,7 +54,6 @@ export class MCPToolClient extends EventEmitter {
 
       this.process.stderr?.on('data', (data: Buffer) => {
         const error = data.toString();
-        // MCP服务器运行时输出
         if (error.includes('running on stdio')) {
           console.error(`[${this.name}] Connected`);
         } else if (error.includes('Error')) {
@@ -72,11 +71,18 @@ export class MCPToolClient extends EventEmitter {
         this.connected = false;
       });
 
-      // 等待连接完成
-      setTimeout(() => {
-        this.connected = true;
-        this.loadTools().then(() => resolve()).catch(reject);
-      }, 1000);
+      // 等待300ms后加载工具（进程启动需要时间）
+      setTimeout(async () => {
+        try {
+          await this.loadTools();
+          this.connected = true;
+          resolve();
+        } catch (error) {
+          console.error(`[${this.name}] Failed to load tools:`, error);
+          this.connected = true; // 仍然标记为已连接，后续会使用mock数据
+          resolve();
+        }
+      }, 300);
     });
   }
 
@@ -136,13 +142,13 @@ export class MCPToolClient extends EventEmitter {
       this.pendingRequests.set(id, { resolve, reject });
       this.process.stdin.write(JSON.stringify(message) + '\n');
 
-      // 超时处理
+      // 超时处理 - 默认10秒（由调用方控制具体超时）
       setTimeout(() => {
         if (this.pendingRequests.has(id)) {
           this.pendingRequests.delete(id);
           reject(new Error(`Request ${method} timed out`));
         }
-      }, 30000);
+      }, 10000);
     });
   }
 

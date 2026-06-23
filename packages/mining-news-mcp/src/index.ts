@@ -140,58 +140,63 @@ async function searchNews(query: string, days: number = 7): Promise<NewsSearchRe
     mineralType = 'copper';
   }
 
-  const timeout = (ms: number) => new Promise<void>((_, reject) =>
-    setTimeout(() => reject(new Error('Timeout')), ms)
-  );
-
-  for (const source of RSS_SOURCES) {
+  // 并行获取所有RSS源（每个最多1.5秒，快速失败）
+  const fetchSource = async (source: { name: string; url: string }) => {
     try {
       const feed = await Promise.race([
         parser.parseURL(source.url),
-        timeout(5000)
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 1500)),
       ]);
+      return { source, items: (feed as any).items || [] };
+    } catch {
+      return { source, items: [] };
+    }
+  };
 
-      for (const item of feed.items) {
-        const title = item.title || '';
-        const link = item.link || '';
-        const snippet = item.contentSnippet || '';
-        const pubDate = item.pubDate ? new Date(item.pubDate) : null;
+  const results = await Promise.all(RSS_SOURCES.map(fetchSource));
 
-        // 计算相关性分数
-        const relevance = calculateRelevance(title, snippet, query, mineralType);
+  for (const { source, items } of results) {
+    for (const item of items) {
+      const title = item.title || '';
+      const link = item.link || '';
+      const snippet = item.contentSnippet || '';
+      const pubDate = item.pubDate ? new Date(item.pubDate) : null;
 
-        // 跳过低相关性的新闻
-        if (relevance < 3) continue;
+      // 计算相关性分数
+      const relevance = calculateRelevance(title, snippet, query, mineralType);
 
-        // 日期过滤
-        if (!pubDate || pubDate < minDate) continue;
+      // 跳过低相关性的新闻
+      if (relevance < 3) continue;
 
-        articles.push({
-          title,
-          url: link,
-          source: source.name,
-          publishedAt: pubDate.toISOString(),
-          summary: snippet,
-          // @ts-ignore - 自定义属性
-          _relevance: relevance,
-        });
-      }
-    } catch (err) {
-      // 单个源失败不影响其他源
-      console.error(`Skipping ${source.name}`);
+      // 日期过滤
+      if (!pubDate || pubDate < minDate) continue;
+
+      articles.push({
+        title,
+        url: link,
+        source: source.name,
+        publishedAt: pubDate.toISOString(),
+        summary: snippet,
+        // @ts-ignore - 自定义属性
+        _relevance: relevance,
+      });
     }
   }
 
   // 按相关性分数排序，然后按日期
   articles.sort((a, b) => {
-    // @ts-ignore
-    const relevanceDiff = (b._relevance || 0) - (a._relevance || 0);
+    const aRelevance = (a as any)._relevance || 0;
+    const bRelevance = (b as any)._relevance || 0;
+    const relevanceDiff = bRelevance - aRelevance;
     if (relevanceDiff !== 0) return relevanceDiff;
     return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
   });
 
   // 移除内部属性
-  const cleanArticles = articles.map(({ _relevance, ...rest }) => rest);
+  const cleanArticles = articles.map((a) => {
+    const { _relevance, ...rest } = a as any;
+    return rest;
+  });
 
   return {
     articles: cleanArticles.slice(0, 10), // 限制返回数量

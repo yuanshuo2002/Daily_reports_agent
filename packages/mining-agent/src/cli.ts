@@ -80,7 +80,9 @@ ${AVAILABLE_MODELS.map(m => `  ${m.id.padEnd(20)} - ${m.name} (${m.description})
   const agent = new MiningAgent({ modelId });
 
   try {
+    const startTime = Date.now();
     const report = await agent.generateDailyReport(query);
+    console.error(`[Time] 生成耗时: ${Date.now() - startTime}ms`);
 
     // 保存报告
     if (saveDir) {
