@@ -530,47 +530,81 @@ export class MiningAgent {
       return this.generateMarkdownReport(state);
     }
 
+    // 从查询中提取矿种名称用于标题
+    const queryLower = state.query.toLowerCase();
+    let mineralName = '矿业';
+    if (queryLower.includes('锂') || queryLower.includes('lithium')) mineralName = '锂矿';
+    else if (queryLower.includes('铜') || queryLower.includes('copper')) mineralName = '铜矿';
+    else if (queryLower.includes('金') || queryLower.includes('gold')) mineralName = '金价';
+    else if (queryLower.includes('银') || queryLower.includes('silver')) mineralName = '银矿';
+    else if (queryLower.includes('镍') || queryLower.includes('nickel')) mineralName = '镍矿';
+    else if (queryLower.includes('钴') || queryLower.includes('cobalt')) mineralName = '钴矿';
+    else if (queryLower.includes('铁') || queryLower.includes('iron')) mineralName = '铁矿';
+
+    // 筛选相关储量数据
+    const relevantResources = state.resources.filter(r =>
+      state.query.toLowerCase().includes(r.mineralType.toLowerCase()) ||
+      state.query.toLowerCase().includes(mineralName)
+    );
+
+    // 筛选相关价格数据
+    const relevantPrices = state.priceTrends.filter(p =>
+      state.query.toLowerCase().includes(p.commodity.toLowerCase()) ||
+      state.query.toLowerCase().includes(mineralName)
+    );
+
+    // 筛选相关新闻
+    const relevantNews = state.newsArticles.filter(a =>
+      state.query.toLowerCase().includes('金') && (a.title.toLowerCase().includes('gold') || a.title.includes('金')) ||
+      state.query.toLowerCase().includes('锂') && (a.title.toLowerCase().includes('lithium') || a.title.includes('锂')) ||
+      state.query.toLowerCase().includes('铜') && (a.title.toLowerCase().includes('copper') || a.title.includes('铜')) ||
+      state.query.toLowerCase().includes(mineralName)
+    ) || state.newsArticles.slice(0, 3);
+
     try {
-      const prompt = `你是一个专业的矿业分析师。请根据以下信息，用简洁专业的语言生成一份矿业日报。
+      const prompt = `你是一个专业的矿业市场分析师。请根据以下信息生成一份专业的矿业市场分析日报。
 
-## 基本信息
-- 矿区: ${state.miningArea}
-- 日期: ${new Date().toLocaleDateString('zh-CN')}
-- 生成模型: ${this.modelInfo.name}
+## 用户查询
+"${state.query}"
 
-## 关键数据
-${state.resources.length > 0 ? `
-**储量概况:**
-${state.resources.map(r => `- ${r.mineralType}: 指示储量 ${r.indicatedReserves.toLocaleString()} ${r.unit}`).join('\n')}` : ''}
+## 重要指令
+1. 报告标题必须包含矿种名称（如：金价、铜矿、锂矿）
+2. 只使用与查询相关的矿种数据，不要混入其他矿种
+3. 如果某些数据与查询无关，请忽略它
 
-${state.priceTrends.length > 0 ? `
-**价格走势:**
-${state.priceTrends.map(p => `- ${p.commodity}: ¥${p.average.toLocaleString()}/吨 (${p.trend === 'up' ? '上涨' : p.trend === 'down' ? '下跌' : '平稳'})`).join('\n')}` : ''}
+## 矿区信息
+${state.miningArea}
 
-## 新闻要点
-${state.newsArticles.slice(0, 5).map((a, i) => `${i + 1}. ${a.title}`).join('\n')}
+## 相关储量数据
+${relevantResources.length > 0 ? relevantResources.map(r => `- ${r.mininalType || r.mineralType}: 指示储量 ${r.indicatedReserves.toLocaleString()} ${r.unit}`).join('\n') : '暂无相关储量数据'}
+
+## 相关价格数据
+${relevantPrices.length > 0 ? relevantPrices.map(p => `- ${p.commodity}: ¥${p.average.toLocaleString()}/吨 (${p.trend === 'up' ? '上涨📈' : p.trend === 'down' ? '下跌📉' : '平稳➡️'})`).join('\n') : '暂无相关价格数据'}
+
+## 相关新闻（请总结这些新闻要点）
+${relevantNews.map((a, i) => `${i + 1}. ${a.title}`).join('\n') || '暂无相关新闻'}
 
 ## 风险提示
-${state.riskWarnings.map(r => `- [${r.level.toUpperCase()}] ${r.title}`).join('\n')}
+${state.riskWarnings.slice(0, 2).map(r => `- [${r.level.toUpperCase()}] ${r.title}: ${r.description}`).join('\n')}
 
-请用Markdown格式生成一份精炼的日报，格式如下（控制在500字以内）:
+请用Markdown格式生成日报，结构如下（控制在400字以内）:
 
-# 🏔️ [矿区简称] 矿业日报
-> 📅 [日期] | 🤖 ${this.modelInfo.name}
+# 🏔️ [矿种简称] 市场日报
+> 📅 [日期] | 🤖 AI分析
 
 ## 📰 今日要点
-[3-5句话总结最重要的新闻，简洁有力]
+[3-4句话总结相关新闻要点和价格走势，简洁有力]
 
-## 📊 储量与价格
-[用表格展示储量数据和价格走势]
+## 📊 今日行情
+[只列出与查询相关的矿种数据，用表格展示]
 
 ## ⚠️ 风险提示
-[列出主要风险，用🔴🟡🟢表示级别]
+[🔴高风险/🟡中风险/🟢低风险 + 简要描述]
 
 ## 📚 来源
-[2-3个主要来源链接]
+[列出1-2个新闻来源名称]
 
-使用中文，专业简洁，突出重点数据。`;
+重要：只关注查询中提到的矿种，不要混入锂矿、铜矿等其他不相关的数据！`;
 
       const response = await this.llmClient.generate(prompt, {
         maxTokens: 4096,
