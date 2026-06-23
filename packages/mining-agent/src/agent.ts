@@ -635,6 +635,13 @@ export class MiningAgent {
     });
 
     try {
+      // 生成当前日期，确保LLM不会虚构日期
+      const currentDate = new Date().toLocaleDateString('zh-CN', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+
       const prompt = `你是一个专业的矿业市场分析师。请根据以下信息生成一份专业的矿业市场分析日报。
 
 ## 用户查询
@@ -645,6 +652,7 @@ export class MiningAgent {
 2. 只使用与查询相关的矿种数据，不要混入其他矿种
 3. 如果某些数据与查询无关，请忽略它
 4. 报告内容要详细全面，至少500字
+5. **必须使用以下日期格式: ${currentDate}**，不要自己编造日期！
 
 ## 矿区信息
 ${state.miningArea}
@@ -664,7 +672,7 @@ ${state.riskWarnings.slice(0, 2).map(r => `- [${r.level.toUpperCase()}] ${r.titl
 请用Markdown格式生成日报，结构如下:
 
 # 🏔️ [矿种简称] 市场日报
-> 📅 [日期] | 🤖 AI分析
+> 📅 ${currentDate} | 🤖 AI分析
 
 ## 📰 今日要点
 [详细总结相关新闻要点和价格走势，3-5句话]
@@ -678,7 +686,7 @@ ${state.riskWarnings.slice(0, 2).map(r => `- [${r.level.toUpperCase()}] ${r.titl
 ## 📚 来源
 [列出新闻来源名称]
 
-重要：只关注查询中提到的矿种，不要混入其他不相关的数据！报告内容要详细，至少500字。`;
+重要：只关注查询中提到的矿种，不要混入其他不相关的数据！报告内容要详细，至少500字。**日期必须是: ${currentDate}**`;
 
       const response = await this.llmClient.generate(prompt, {
         maxTokens: 4096,
