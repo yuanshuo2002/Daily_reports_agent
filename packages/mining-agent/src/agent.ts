@@ -384,37 +384,45 @@ export class MiningAgent {
     }
 
     try {
-      const prompt = `你是一个专业的矿业分析师。请根据以下信息，生成一份专业的矿权日报。
+      const prompt = `你是一个专业的矿业分析师。请根据以下信息，用简洁专业的语言生成一份矿业日报。
 
-## 查询信息
+## 基本信息
 - 矿区: ${state.miningArea}
 - 日期: ${new Date().toLocaleDateString('zh-CN')}
 
-## 新闻摘要
-${state.newsSummary}
-${state.newsArticles.map((a, i) => `${i + 1}. [${a.title}](${a.url}) - ${a.source}`).join('\n')}
+## 关键数据
+${state.resources.length > 0 ? `
+**储量概况:**
+${state.resources.map(r => `- ${r.mineralType}: 指示储量 ${r.indicatedReserves.toLocaleString()} ${r.unit}`).join('\n')}` : ''}
 
-## 储量数据
-${state.resources.map(r => `- ${r.mineralType}: 指示储量 ${r.indicatedReserves.toLocaleString()} ${r.unit}, 推断储量 ${r.inferredReserves.toLocaleString()} ${r.unit}`).join('\n')}
+${state.priceTrends.length > 0 ? `
+**价格走势:**
+${state.priceTrends.map(p => `- ${p.commodity}: ¥${p.average.toLocaleString()}/吨 (${p.trend === 'up' ? '上涨📈' : p.trend === 'down' ? '下跌📉' : '平稳➡️'})`).join('\n')}` : ''}
 
-## 价格走势
-${state.priceTrends.map(p => `- ${p.commodity}: 平均 ¥${p.average.toLocaleString()}, 高点 ¥${p.high.toLocaleString()}, 低点 ¥${p.low.toLocaleString()} (趋势: ${p.trend === 'up' ? '上涨' : p.trend === 'down' ? '下跌' : '平稳'})`).join('\n')}
+## 新闻要点
+${state.newsArticles.slice(0, 5).map((a, i) => `${i + 1}. ${a.title}`).join('\n')}
 
 ## 风险提示
-${state.riskWarnings.map(r => `- [${r.level.toUpperCase()}] ${r.title}: ${r.description}`).join('\n')}
+${state.riskWarnings.map(r => `- [${r.level.toUpperCase()}] ${r.title}`).join('\n')}
 
-## 信息来源
-${state.sources.map(s => `- ${s}`).join('\n')}
+请用Markdown格式生成一份精炼的日报，格式如下（控制在500字以内）:
 
-请用Markdown格式生成一份专业的矿业日报，包含:
-1. 标题和日期
-2. 今日要闻
-3. 储量数据
-4. 价格分析
-5. 风险提示
-6. 参考来源
+# 🏔️ [矿区简称] 矿业日报
+> 📅 [日期]
 
-使用中文撰写。`;
+## 📰 今日要点
+[3-5句话总结最重要的新闻，简洁有力]
+
+## 📊 储量与价格
+[用表格展示储量数据和价格走势]
+
+## ⚠️ 风险提示
+[列出主要风险，用🔴🟡🟢表示级别]
+
+## 📚 来源
+[2-3个主要来源链接]
+
+使用中文，专业简洁，突出重点数据。`;
 
       const response = await this.anthropic.messages.create({
         model: this.model,
@@ -447,69 +455,72 @@ ${state.sources.map(s => `- ${s}`).join('\n')}
       day: 'numeric',
     });
 
-    let report = `# 矿权日报
+    // 精选新闻，只显示最重要的3条
+    const topNews = state.newsArticles.slice(0, 3);
 
-**日期**: ${date}
-**矿区**: ${state.miningArea}
-**生成时间**: ${new Date().toLocaleString('zh-CN')}
+    let report = `# 🏔️ ${state.miningArea.split(',')[0]} 矿业日报
 
----
-
-## 今日要闻
-
-${state.newsSummary}
-
-${state.newsArticles.map((article, i) => `
-### ${i + 1}. ${article.title}
-- **来源**: ${article.source}
-- **发布时间**: ${new Date(article.publishedAt).toLocaleDateString('zh-CN')}
-- **摘要**: ${article.summary}
-- **链接**: ${article.url}
-`).join('\n')}
+> 📅 ${date} | 🤖 自动生成
 
 ---
 
-## 储量数据
+## 📰 今日要闻
 
-| 矿种 | 指示储量 | 推断储量 | 单位 |
-|------|----------|----------|------|
-${state.resources.map(r => `| ${r.mineralType} | ${r.indicatedReserves.toLocaleString()} | ${r.inferredReserves.toLocaleString()} | ${r.unit} |`).join('\n')}
-
----
-
-## 价格走势
-
-${state.priceTrends.map(p => `
-### ${p.commodity}
-- **30日均价**: ¥${p.average.toLocaleString()}
-- **最高价**: ¥${p.high.toLocaleString()}
-- **最低价**: ¥${p.low.toLocaleString()}
-- **趋势**: ${p.trend === 'up' ? '📈 上涨' : p.trend === 'down' ? '📉 下跌' : '➡️ 平稳'}
-`).join('\n')}
+${topNews.length > 0 ? topNews.map((article, i) => `**${i + 1}. ${article.title}**
+${article.summary.slice(0, 150)}${article.summary.length > 150 ? '...' : ''}
+*来源: ${article.source}*`).join('\n\n') : '*暂无最新新闻*'}
 
 ---
 
-## 风险提示
+## 📊 储量数据
 
-${state.riskWarnings.map(r => {
-  const emoji = r.level === 'high' ? '🔴' : r.level === 'medium' ? '🟡' : '🟢';
-  return `### ${emoji} ${r.title}
-${r.description}
-`;
+| 矿种 | 指示储量 | 推断储量 |
+|:-----|--------:|--------:|
+${state.resources.map(r => `| ${r.mineralType} | **${this.formatNumber(r.indicatedReserves)}** ${r.unit} | ${this.formatNumber(r.inferredReserves)} ${r.unit} |`).join('\n')}
+
+---
+
+## 💰 价格走势
+
+| 商品 | 当前均价 | 30日区间 | 趋势 |
+|:-----|--------:|--------:|:----:|
+${state.priceTrends.map(p => {
+  const trendIcon = p.trend === 'up' ? '📈' : p.trend === 'down' ? '📉' : '➡️';
+  const trendText = p.trend === 'up' ? '上涨' : p.trend === 'down' ? '下跌' : '平稳';
+  return `| ${p.commodity} | **¥${this.formatNumber(p.average)}** | ¥${this.formatNumber(p.low)} ~ ¥${this.formatNumber(p.high)} | ${trendIcon} ${trendText} |`;
 }).join('\n')}
 
 ---
 
-## 信息来源
+## ⚠️ 风险提示
 
-${state.sources.map(s => `- ${s}`).join('\n')}
+${state.riskWarnings.map(r => {
+  const icon = r.level === 'high' ? '🔴' : r.level === 'medium' ? '🟡' : '🟢';
+  return `| ${icon} | **${r.title}** | ${r.description} |`;
+}).join('\n')}
 
 ---
 
-*本报告由矿权日报Agent自动生成*
-`;
+## 📚 参考来源
 
+${state.sources.slice(0, 5).map(s => `- ${s}`).join('\n')}
+
+> *本报告由矿权日报Agent自动生成 | 生成时间: ${new Date().toLocaleTimeString('zh-CN')}*
+`;
     return report;
+  }
+
+  /**
+   * 格式化数字
+   */
+  private formatNumber(num: number): string {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1) + 'M';
+    }
+    if (num >= 1000) {
+      return (num / 1000).toFixed(0) + 'K';
+    }
+    return num.toLocaleString();
   }
 
   /**
