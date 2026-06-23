@@ -9,7 +9,8 @@ import { createLLMClient, isLLMConfigured, getModelInfo, LLMClient } from './llm
 import * as path from 'path';
 import * as dotenv from 'dotenv';
 
-dotenv.config();
+// 加载 .env 文件
+dotenv.config({ path: path.join(process.cwd(), '.env') });
 
 export interface DailyReportState {
   query: string;
@@ -105,11 +106,11 @@ export class MiningAgent {
     try {
       this.llmClient = createLLMClient({
         provider: this.modelInfo.provider as 'anthropic' | 'openai' | 'deepseek' | 'compatible',
-        model: this.modelId,
+        model: this.getModelName(),
         apiKey: this.getApiKey(),
         baseUrl: this.getBaseUrl(),
       });
-      console.error(`[Agent] LLM 客户端初始化成功: ${this.modelInfo.name}`);
+      console.error(`[Agent] LLM 客户端初始化成功: ${this.modelInfo.name} (${this.getModelName()})`);
     } catch (error) {
       console.error(`[Agent] LLM 客户端初始化失败:`, error);
     }
@@ -132,6 +133,23 @@ export class MiningAgent {
       compatible: process.env.COMPATIBLE_BASE_URL,
     };
     return urlMap[this.modelInfo.provider];
+  }
+
+  private getModelName(): string {
+    // 兼容模式使用环境变量中的实际模型名
+    if (this.modelInfo.provider === 'compatible') {
+      return process.env.COMPATIBLE_MODEL || 'gpt-4o';
+    }
+    // DeepSeek 也使用环境变量
+    if (this.modelInfo.provider === 'deepseek') {
+      return process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+    }
+    // OpenAI 使用环境变量
+    if (this.modelInfo.provider === 'openai') {
+      return process.env.OPENAI_MODEL || 'gpt-4o';
+    }
+    // Anthropic 使用 modelId
+    return this.modelId;
   }
 
   async initialize(): Promise<void> {
